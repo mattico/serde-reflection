@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Numerics;
 using System.Text;
 
-namespace Serde {
+namespace Serde
+{
     public abstract class BinarySerializer: ISerializer, IDisposable {
         protected MemoryStream buffer;
         protected BinaryWriter output;
         private long containerDepthBudget;
 
         public BinarySerializer(long maxContainerDepth) {
+            buffer = new MemoryStream();
             output = new BinaryWriter(buffer);
             containerDepthBudget = maxContainerDepth;
         }
@@ -88,7 +89,7 @@ namespace Serde {
 
             // Complete with zeros if needed.
             for (int i = len; i < 16; i++) {
-                output.Write(0);
+                output.Write((byte)0);
             }
         }
 

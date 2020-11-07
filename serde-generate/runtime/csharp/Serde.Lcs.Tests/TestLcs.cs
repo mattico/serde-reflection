@@ -1,0 +1,69 @@
+using System;
+using System.Numerics;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Serde.Lcs.Tests
+{
+    [TestClass]
+    public class TestLcs
+    {
+        [TestMethod]
+        public void TestSerializeU128()
+        {
+            LcsSerializer serializer = new LcsSerializer();
+            serializer.serialize_u128((BigInteger.One << 128) - 1);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 });
+
+            serializer = new LcsSerializer();
+            serializer.serialize_u128(BigInteger.One);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            serializer = new LcsSerializer();
+            serializer.serialize_u128(BigInteger.Zero);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_u128(BigInteger.MinusOne));
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_u128((BigInteger.One << 128) + 1));
+        }
+
+        [TestMethod]
+        public void TestSerializeI128()
+        {
+            LcsSerializer serializer = new LcsSerializer();
+            serializer.serialize_i128(BigInteger.MinusOne);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 });
+
+            serializer = new LcsSerializer();
+            serializer.serialize_i128(BigInteger.One);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            serializer = new LcsSerializer();
+            serializer.serialize_i128((BigInteger.One << 127) - 1);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127 });
+
+            serializer = new LcsSerializer();
+            serializer.serialize_i128(-(BigInteger.One << 127));
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x80 });
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_i128(BigInteger.One << 127));
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_i128(-((BigInteger.One << 127) + 1)));
+        }
+
+        [TestMethod]
+        public void TestSliceOrdering()
+        {
+            LcsSerializer serializer = new LcsSerializer();
+            serializer.serialize_u8(255);
+            serializer.serialize_u32(1);
+            serializer.serialize_u32(1);
+            serializer.serialize_u32(2);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, /**/ 1, /**/ 0, 0, /**/ 0, 1, 0, /**/ 0, /**/ 0, /**/ 2, 0, 0, 0 });
+
+            int[] offsets = { 1, 2, 4, 7, 8, 9 };
+            serializer.sort_map_entries(offsets);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, /**/ 0, /**/ 0, /**/ 0, 0, /**/ 0, 1, 0,  /**/ 1, /**/ 2, 0, 0, 0 });
+        }
+    }
+}

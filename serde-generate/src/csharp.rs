@@ -424,10 +424,14 @@ foreach (var item in value) {{
                     self.out,
                     r#"
 serializer.serialize_len(value.Count);
+int[] offsets = new int[value.Count];
+int count = 0;
 foreach (var entry in serializer.get_ordered_entries(value)) {{
+    offsets[count++] = serializer.get_buffer_offset();
     {}
     {}
 }}
+serializer.sort_map_entries(offsets);
 "#,
                     self.quote_serialize_value("entry.Key", key),
                     self.quote_serialize_value("entry.Value", value)

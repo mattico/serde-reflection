@@ -36,9 +36,9 @@ namespace Serde.Lcs
             int offset0 = offsets[0];
             Range[] ranges = new Range[offsets.Length];
             for (int i = 0; i < offsets.Length - 1; i++) {
-                ranges[i] = new Range(offsets[i], offsets[i + 1]);
+                ranges[i] = new Range(offsets[i] - offset0, offsets[i + 1] - offset0);
             }
-            ranges[^1] = new Range(offsets[^1], (int)buffer.Length);
+            ranges[^1] = new Range(offsets[^1] - offset0, (int)buffer.Length - offset0);
 
             byte[] data = new byte[buffer.Length - offset0];
             buffer.Seek(offset0, SeekOrigin.Begin);
