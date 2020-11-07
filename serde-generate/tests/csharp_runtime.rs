@@ -71,8 +71,9 @@ fn test_csharp_runtime_on_simple_data(runtime: Runtime) {
     let installer = csharp::Installer::new(dir.path().to_path_buf());
     installer.install_serde_runtime().unwrap();
     installer.install_bincode_runtime().unwrap();
+    installer.install_lcs_runtime().unwrap();
 
-    let test_dir = dirdir.path().join("Serde.Tests");
+    let test_dir = dir.path().join("Serde.Tests");
     std::fs::create_dir(&test_dir).unwrap();
     std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
         &test_dir.join("Serde.Tests.csproj")).unwrap();
@@ -166,6 +167,8 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
 
     let installer = csharp::Installer::new(dir.path().to_path_buf());
     installer.install_serde_runtime().unwrap();
+    installer.install_bincode_runtime().unwrap();
+    installer.install_lcs_runtime().unwrap();
 
     let test_dir = dir.path().join("Serde.Tests");
     std::fs::create_dir(&test_dir).unwrap();
@@ -173,23 +176,31 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
         &test_dir.join("Serde.Tests.csproj")).unwrap();
 
     let config =
-        CodeGeneratorConfig::new("testing".to_string()).with_encodings(vec![runtime.into()]);
+        CodeGeneratorConfig::new("Serde.Tests".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
     generator
         .write_source_files(dir.path().to_path_buf(), &registry)
         .unwrap();
 
-    let positive_encodings: Vec<_> = runtime
+    let mut positive_encodings = runtime
         .get_positive_samples_quick()
         .iter()
         .map(|bytes| quote_bytes(bytes))
-        .collect();
+        .collect::<Vec<_>>()
+        .join(",\n\tnew byte[] ");
+    if positive_encodings.len() > 0 {
+        positive_encodings = format!("\nnew byte[] {}", positive_encodings);
+    }
 
-    let negative_encodings: Vec<_> = runtime
+    let mut negative_encodings = runtime
         .get_negative_samples()
         .iter()
         .map(|bytes| quote_bytes(bytes))
-        .collect();
+        .collect::<Vec<_>>()
+        .join(",\n\tnew byte[] ");
+    if negative_encodings.len() > 0 {
+        negative_encodings = format!("\nnew byte[] {}", negative_encodings);
+    }
 
     let mut source = File::create(test_dir.join("TestRuntime.cs")).unwrap();
     writeln!(
@@ -198,6 +209,8 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Linq;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Serde.Tests {{
@@ -209,7 +222,7 @@ namespace Serde.Tests {{
         [TestMethod]
         public void TestPassFailEncoding() {{
             foreach (byte[] input in positive_inputs) {{
-                SerdeData test = SerdeData.{2}Deserialize(input);
+                SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
                 byte[] output = test.{2}Serialize();
     
                 CollectionAssert.AreEqual(input, output);
@@ -219,9 +232,9 @@ namespace Serde.Tests {{
                     byte[] input2 = input.ToArray();
                     input2[i] ^= 0x80;
                     try {{
-                        SerdeData test2 = SerdeData.{2}Deserialize(input2);
+                        SerdeData test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
                         Assert.AreNotEqual(test2, test);
-                    }} catch (DeserializationError e) {{
+                    }} catch (DeserializationException) {{
                         // All good
                     }}
                 }}
@@ -230,11 +243,9 @@ namespace Serde.Tests {{
     
             foreach (byte[] input in negative_inputs) {{
                 try {{
-                    SerdeData test = SerdeData.{2}Deserialize(input);
-                    int[] bytes = new int[input.Length];
-                    Arrays.setAll(bytes, n -> Math.floorMod(input[n], 256));
-                    throw new Exception("Input should fail to deserialize: " + Arrays.asList(bytes));
-                }} catch (DeserializationError e) {{
+                    SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
+                    throw new Exception("Input should fail to deserialize: " + input.ToString());
+                }} catch (DeserializationException) {{
                         // All good
                 }}
             }}
@@ -242,8 +253,8 @@ namespace Serde.Tests {{
     }}
 }}
 "#,
-        positive_encodings.join(", "),
-        negative_encodings.join(", "),
+        positive_encodings,
+        negative_encodings,
         runtime.name().to_camel_case(),
     )
     .unwrap();
