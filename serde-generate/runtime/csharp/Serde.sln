@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serde.Bincode", "Serde.Binc
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serde.Lcs", "Serde.Lcs\Serde.Lcs.csproj", "{7B34D9AE-FBF2-4F52-9D01-213BF4F77696}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serde.Lcs.Tests", "Serde.Lcs.Tests\Serde.Lcs.Tests.csproj", "{80CD8AB3-DB9B-4D0E-875D-DE906A50968D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serde.Lcs.Tests", "Serde.Lcs.Tests\Serde.Lcs.Tests.csproj", "{80CD8AB3-DB9B-4D0E-875D-DE906A50968D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serde.GenerationTest", "Serde.GenerationTest\Serde.GenerationTest.csproj", "{2AE2AEC7-F73E-4DEF-BBE9-7BC492729821}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{80CD8AB3-DB9B-4D0E-875D-DE906A50968D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{80CD8AB3-DB9B-4D0E-875D-DE906A50968D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{80CD8AB3-DB9B-4D0E-875D-DE906A50968D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2AE2AEC7-F73E-4DEF-BBE9-7BC492729821}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2AE2AEC7-F73E-4DEF-BBE9-7BC492729821}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2AE2AEC7-F73E-4DEF-BBE9-7BC492729821}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2AE2AEC7-F73E-4DEF-BBE9-7BC492729821}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
