@@ -136,7 +136,7 @@ where
             self.out,
             r"using System;
 using System.Collections.Generic;
-using System.Numeric;
+using System.Numerics;
 using AD.FunctionalExtensions;"
         )?;
         Ok(())
@@ -385,7 +385,7 @@ using AD.FunctionalExtensions;"
 
         write!(
             self.out,
-            "static void serialize_{}({} value, Serde.Serializer serializer) {{",
+            "static void serialize_{}({} value, Serde.ISerializer serializer) {{",
             name,
             self.quote_type(format0)
         )?;
@@ -473,7 +473,7 @@ foreach (var item in value) {{
 
         write!(
             self.out,
-            "static {} deserialize_{}(Serde.Deserializer deserializer) {{",
+            "static {} deserialize_{}(Serde.IDeserializer deserializer) {{",
             self.quote_type(format0),
             name,
         )?;
@@ -616,17 +616,19 @@ return obj;
     ) -> Result<()> {
         // Beginning of class
         writeln!(self.out)?;
-        if let Some(base) = variant_base {
+        let fn_mods = if let Some(base) = variant_base {
             self.output_comment(name)?;
             writeln!(
                 self.out,
-                "public sealed class {} : {} {{",
+                "public sealed class {}: {} {{",
                 name, base
             )?;
+            "override"
         } else {
             self.output_comment(name)?;
             writeln!(self.out, "public sealed class {} {{", name)?;
-        }
+            ""
+        };
         let reserved_names = &["Builder"];
         self.enter_class(name, reserved_names);
         // Fields
@@ -664,7 +666,8 @@ return obj;
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic void serialize(Serde.Serializer serializer) {{",
+                "\npublic {} void serialize(Serde.ISerializer serializer) {{",
+                fn_mods
             )?;
             self.out.indent();
             writeln!(self.out, "serializer.increase_container_depth();")?;
@@ -693,13 +696,15 @@ return obj;
             if variant_index.is_none() {
                 writeln!(
                     self.out,
-                    "\npublic static {} deserialize(Serde.Deserializer deserializer) {{",
+                    "\npublic static {} {} deserialize(Serde.IDeserializer deserializer) {{",
+                    fn_mods,
                     name,
                 )?;
             } else {
                 writeln!(
                     self.out,
-                    "\nstatic {} load(Serde.Deserializer deserializer) {{",
+                    "\nstatic {} {} load(Serde.IDeserializer deserializer) {{",
+                    fn_mods,
                     name,
                 )?;
             }
@@ -829,11 +834,11 @@ if (GetType() != obj.GetType()) return false;
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic abstract void serialize(Serde.Serializer serializer);"
+                "\npublic abstract void serialize(Serde.ISerializer serializer);"
             )?;
             write!(
                 self.out,
-                "\npublic static {} deserialize(Serde.Deserializer deserializer) {{",
+                "\npublic static {} deserialize(Serde.IDeserializer deserializer) {{",
                 name
             )?;
             self.out.indent();
@@ -877,11 +882,10 @@ switch (index) {{"#,
             self.out,
             r#"
 public byte[] {0}Serialize()  {{
-    Serde.ISerializer serializer = new Serde.{0}.{1}Serializer();
+    Serde.ISerializer serializer = new Serde.{0}.{0}Serializer();
     serialize(serializer);
     return serializer.get_bytes();
 }}"#,
-            encoding.name(),
             encoding.name().to_camel_case()
         )
     }
@@ -898,7 +902,7 @@ public static {0} {1}Deserialize(ReadOnlySpan<byte> input) {{
     if (input == null) {{
          throw new Serde.DeserializationException("Cannot deserialize null array");
     }}
-    Serde.Deserializer deserializer = new Serde.{1}.{2}Deserializer(input);
+    Serde.IDeserializer deserializer = new Serde.{1}.{1}Deserializer(input);
     {0} value = deserialize(deserializer);
     if (deserializer.get_buffer_offset() < input.Length) {{
          throw new Serde.DeserializationException("Some input bytes were not read");
@@ -906,7 +910,6 @@ public static {0} {1}Deserialize(ReadOnlySpan<byte> input) {{
     return value;
 }}"#,
             name,
-            encoding.name(),
             encoding.name().to_camel_case()
         )
     }
