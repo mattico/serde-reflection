@@ -1,8 +1,9 @@
 using System;
 using System.Numerics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Serde.Lcs;
 
-namespace Serde.Lcs.Tests
+namespace Serde.Tests
 {
     [TestClass]
     public class TestLcs

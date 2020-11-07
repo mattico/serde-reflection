@@ -6,11 +6,32 @@ use serde_generate::{
     csharp, test_utils,
     test_utils::{Choice, Runtime, Test},
     CodeGeneratorConfig,
+    SourceInstaller,
 };
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 use tempfile::tempdir;
+use heck::CamelCase;
+use std::path::Path;
+
+fn dotnet_build(proj_dir: &Path) {
+    let status = Command::new("dotnet")
+        .arg("build")
+        .current_dir(proj_dir)
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+// TODO: switch to NUnit for better xplat
+fn run_mstest(proj_dir: &Path) {
+    let dll_path = proj_dir.join("bin/Debug/netcoreapp3.1/Serde.Tests.dll");
+    let status = Command::new("C:/Program Files (x86)/Microsoft Visual Studio/2019/Preview/Common7/IDE/CommonExtensions/Microsoft/TestWindow/vstest.console.exe")
+        .arg(&dll_path)
+        .status().unwrap();
+    assert!(status.success());
+}
 
 #[test]
 fn test_csharp_lcs_runtime_tests() {
@@ -30,12 +51,8 @@ fn test_csharp_lcs_runtime_tests() {
     std::fs::copy("runtime/csharp/Serde.Tests/TestLcs.cs", 
         &lcs_test_dir.join("TestLcs.cs")).unwrap();
 
-    let status = Command::new("dotnet")
-        .arg("build")
-        .current_dir(lcs_test_dir)
-        .status()
-        .unwrap();
-    assert!(status.success());
+    dotnet_build(&lcs_test_dir);
+    run_mstest(&lcs_test_dir);
 }
 
 #[test]
@@ -52,8 +69,17 @@ fn test_csharp_runtime_on_simple_data(runtime: Runtime) {
     let registry = test_utils::get_simple_registry().unwrap();
     let dir = tempdir().unwrap();
 
+    let installer = csharp::Installer::new(dir.path().to_path_buf());
+    installer.install_serde_runtime().unwrap();
+
+    let test_dir = dir.path().join("Serde.Tests");
+    std::fs::create_dir(&test_dir).unwrap();
+    std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
+        &test_dir.join("Serde.Tests.csproj")).unwrap();
+
+    // TODO: Is the CodeGenerator supposed to copy the serde runtime?
     let config =
-        CodeGeneratorConfig::new("testing".to_string()).with_encodings(vec![runtime.into()]);
+        CodeGeneratorConfig::new("Serde.Tests".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
     generator
         .write_source_files(dir.path().to_path_buf(), &registry)
@@ -65,40 +91,38 @@ fn test_csharp_runtime_on_simple_data(runtime: Runtime) {
         c: Choice::C { x: 7 },
     });
 
-    let mut source = File::create(&dir.path().join("Main.cs")).unwrap();
+    let mut source = File::create(&test_dir.join("TestRuntime.cs")).unwrap();
     writeln!(
         source,
         r#"
 using System;
 using System.Collections.Generic;
-using Serde;
-import testing.Choice;
-import testing.Test;
+using System.Numerics;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-public class Main {{
-    public static void main(String[] args) throws csharp.lang.Exception {{
-        byte[] input = new byte[] {{{0}}};
+namespace Serde.Tests {{
+    [TestClass]
+    public class TestRuntime {{
+        [TestMethod]
+        public void TestRoundTrip() {{
+            byte[] input = new byte[] {{{0}}};
 
-        Test test = Test.{1}Deserialize(input);
+            Test test = Test.{1}Deserialize(input);
 
-        List<@Unsigned Integer> a = Arrays.asList(4, 6);
-        Tuple2<Long, @Unsigned Long> b = new Tuple2<>(Long.valueOf(-3), Long.valueOf(5));
-        Choice c = new Choice.C(Byte.valueOf((byte) 7));
-        Test test2 = new Test(a, b, c);
+            List<uint> a = new List(4, 6);
+            var b = ((long)-3, (ulong)5);
+            Choice c = new Choice.C((byte) 7);
+            Test test2 = new Test(a, b, c);
 
-        assert test.equals(test2);
+            Assert.AreEqual(test, test2);
 
-        byte[] output = test2.{1}Serialize();
+            byte[] output = test2.{1}Serialize();
 
-        assert csharp.util.Arrays.equals(input, output);
+            CollectionAssert.AreEqual(input, output);
 
-        byte[] input2 = new byte[] {{{0}, 1}};
-        try {{
-            Test.{1}Deserialize(input2);
-        }} catch (DeserializationError e) {{
-            return;
+            byte[] input2 = new byte[] {{{0}, 1}};
+            Assert.ThrowsException<DeserializationException>(() => Test.{1}Deserialize(input2));
         }}
-        assert false;
     }}
 }}
 "#,
@@ -107,43 +131,12 @@ public class Main {{
             .map(|x| format!("{}", *x as i8))
             .collect::<Vec<_>>()
             .join(", "),
-        runtime.name(),
+        runtime.name().to_camel_case(),
     )
     .unwrap();
 
-    let paths = std::iter::empty()
-        .chain(std::fs::read_dir("runtime/csharp/com/novi/serde").unwrap())
-        .chain(std::fs::read_dir("runtime/csharp/com/novi/".to_string() + runtime.name()).unwrap())
-        .chain(std::fs::read_dir(dir.path().join("testing")).unwrap())
-        .map(|e| e.unwrap().path());
-    let status = Command::new("csharpc")
-        .arg("-Xlint")
-        .arg("-d")
-        .arg(dir.path())
-        .args(paths)
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let status = Command::new("csharpc")
-        .arg("-Xlint")
-        .arg("-cp")
-        .arg(dir.path())
-        .arg("-d")
-        .arg(dir.path())
-        .arg(dir.path().join("Main.cs"))
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let status = Command::new("csharp")
-        .arg("-enableassertions")
-        .arg("-cp")
-        .arg(dir.path())
-        .arg("Main")
-        .status()
-        .unwrap();
-    assert!(status.success());
+    dotnet_build(&test_dir);
+    run_mstest(&test_dir);
 }
 
 #[test]
@@ -171,6 +164,14 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
     let registry = test_utils::get_registry().unwrap();
     let dir = tempdir().unwrap();
 
+    let installer = csharp::Installer::new(dir.path().to_path_buf());
+    installer.install_serde_runtime().unwrap();
+
+    let test_dir = dir.path().join("Serde.Tests");
+    std::fs::create_dir(&test_dir).unwrap();
+    std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
+        &test_dir.join("Serde.Tests.csproj")).unwrap();
+
     let config =
         CodeGeneratorConfig::new("testing".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
@@ -190,48 +191,52 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
         .map(|bytes| quote_bytes(bytes))
         .collect();
 
-    let mut source = File::create(&dir.path().join("Main.cs")).unwrap();
+    let mut source = File::create(test_dir.join("TestRuntime.cs")).unwrap();
     writeln!(
         source,
         r#"
 using System;
 using System.Collections.Generic;
-using Serde;
-import testing.SerdeData;
+using System.Numerics;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-public class Main {{
-    static final byte[][] positive_inputs = new byte[][] {{{0}}};
-    static final byte[][] negative_inputs = new byte[][] {{{1}}};
+namespace Serde.Tests {{
+    [TestClass]
+    public class TestRuntime {{
+        static readonly byte[][] positive_inputs = new byte[][] {{{0}}};
+        static readonly byte[][] negative_inputs = new byte[][] {{{1}}};
 
-    public static void main(String[] args) throws csharp.lang.Exception {{
-        for (byte[] input : positive_inputs) {{
-            SerdeData test = SerdeData.{2}Deserialize(input);
-            byte[] output = test.{2}Serialize();
-
-            assert csharp.util.Arrays.equals(input, output);
-
-            // Test simple mutations of the input.
-            for (int i = 0; i < input.length; i++) {{
-                byte[] input2 = input.clone();
-                input2[i] ^= 0x80;
-                try {{
-                    SerdeData test2 = SerdeData.{2}Deserialize(input2);
-                    assert test2 != test;
-                }} catch (DeserializationError e) {{
-                    // All good
-                }}
-            }}
-
-        }}
-
-        for (byte[] input : negative_inputs) {{
-            try {{
+        [TestMethod]
+        public void TestPassFailEncoding() {{
+            foreach (byte[] input in positive_inputs) {{
                 SerdeData test = SerdeData.{2}Deserialize(input);
-                Integer[] bytes = new Integer[input.length];
-                Arrays.setAll(bytes, n -> Math.floorMod(input[n], 256));
-                throw new Exception("Input should fail to deserialize: " + Arrays.asList(bytes));
-            }} catch (DeserializationError e) {{
-                    // All good
+                byte[] output = test.{2}Serialize();
+    
+                CollectionAssert.AreEqual(input, output);
+    
+                // Test simple mutations of the input.
+                for (int i = 0; i < input.Length; i++) {{
+                    byte[] input2 = input.ToArray();
+                    input2[i] ^= 0x80;
+                    try {{
+                        SerdeData test2 = SerdeData.{2}Deserialize(input2);
+                        Assert.AreNotEqual(test2, test);
+                    }} catch (DeserializationError e) {{
+                        // All good
+                    }}
+                }}
+    
+            }}
+    
+            foreach (byte[] input in negative_inputs) {{
+                try {{
+                    SerdeData test = SerdeData.{2}Deserialize(input);
+                    int[] bytes = new int[input.Length];
+                    Arrays.setAll(bytes, n -> Math.floorMod(input[n], 256));
+                    throw new Exception("Input should fail to deserialize: " + Arrays.asList(bytes));
+                }} catch (DeserializationError e) {{
+                        // All good
+                }}
             }}
         }}
     }}
@@ -239,67 +244,10 @@ public class Main {{
 "#,
         positive_encodings.join(", "),
         negative_encodings.join(", "),
-        runtime.name(),
+        runtime.name().to_camel_case(),
     )
     .unwrap();
 
-    let paths = std::iter::empty()
-        .chain(std::fs::read_dir("runtime/csharp/com/novi/serde").unwrap())
-        .chain(std::fs::read_dir("runtime/csharp/com/novi/".to_string() + runtime.name()).unwrap())
-        .chain(std::fs::read_dir(dir.path().join("testing")).unwrap())
-        .map(|e| e.unwrap().path());
-    let status = Command::new("csharpc")
-        .arg("-Xlint")
-        .arg("-d")
-        .arg(dir.path())
-        .args(paths)
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let status = Command::new("csharpc")
-        .arg("-Xlint")
-        .arg("-cp")
-        .arg(dir.path())
-        .arg("-d")
-        .arg(dir.path())
-        .arg(dir.path().join("Main.cs"))
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let status = Command::new("csharp")
-        .arg("-enableassertions")
-        .arg("-cp")
-        .arg(dir.path())
-        .arg("Main")
-        .status()
-        .unwrap();
-    assert!(status.success());
-}
-
-#[test]
-fn test_csharp_lcs_runtime_autotest() {
-    let dir = tempdir().unwrap();
-    let paths = std::iter::empty()
-        .chain(std::fs::read_dir("runtime/csharp/com/novi/serde").unwrap())
-        .chain(std::fs::read_dir("runtime/csharp/com/novi/lcs").unwrap())
-        .map(|e| e.unwrap().path());
-    let status = Command::new("csharpc")
-        .arg("-Xlint")
-        .arg("-d")
-        .arg(dir.path())
-        .args(paths)
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let status = Command::new("csharp")
-        .arg("-enableassertions")
-        .arg("-cp")
-        .arg(dir.path())
-        .arg("com.novi.lcs.LcsTest")
-        .status()
-        .unwrap();
-    assert!(status.success());
+    dotnet_build(&test_dir);
+    run_mstest(&test_dir);
 }
