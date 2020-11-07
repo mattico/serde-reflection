@@ -16,6 +16,7 @@
     <ProjectReference Include="..\Serde\Serde.csproj" />
     <ProjectReference Include="..\Bcs\Bcs.csproj" />
     <ProjectReference Include="..\Bincode\Bincode.csproj" />
+    <ProjectReference Include="..\Postcard\Postcard.csproj" />
   </ItemGroup>
 
 </Project>

@@ -460,4 +460,9 @@ serde_bytes = "0.11"
         Self::runtime_installation_message("bcs");
         Ok(())
     }
+
+    #[cfg(feature = "postcard")]
+    fn install_postcard_runtime(&self) -> std::result::Result<(), Self::Error> {
+        Err("Postcard not implemented for Rust".into())
+    }
 }

@@ -186,6 +186,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
+name = "postcard"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e3f5c2e9a91383c6594ec68aa2dfdfe19a3c86f34b088ba7203f2483d2682f"
+dependencies = [
+ "postcard-cobs",
+ "serde",
+]
+
+[[package]]
+name = "postcard-cobs"
+version = "0.1.5-pre"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c68cb38ed13fd7bc9dd5db8f165b7c8d9c1a315104083a2b10f11354c2af97f"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -323,6 +339,7 @@ dependencies = [
  "include_dir",
  "lazy_static",
  "maplit",
+ "postcard",
  "serde",
  "serde-reflection",
  "serde_bytes",

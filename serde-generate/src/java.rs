@@ -991,4 +991,9 @@ impl crate::SourceInstaller for Installer {
             "com/novi/bcs",
         )
     }
+
+    #[cfg(feature = "postcard")]
+    fn install_postcard_runtime(&self) -> std::result::Result<(), Self::Error> {
+        Err("Postcard not implemented for Java".into())
+    }
 }

@@ -611,4 +611,9 @@ impl crate::SourceInstaller for Installer {
         write!(file, "{}", include_str!("../runtime/cpp/bcs.hpp"))?;
         Ok(())
     }
+
+    #[cfg(feature = "postcard")]
+    fn install_postcard_runtime(&self) -> std::result::Result<(), Self::Error> {
+        Err("Postcard not implemented for C++".into())
+    }
 }

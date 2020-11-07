@@ -115,6 +115,14 @@ fn test_csharp_bcs_runtime_tests() {
     run_nunit(&test_dir);
 }
 
+#[cfg(feature = "postcard")]
+#[test]
+fn test_csharp_postcard_runtime_tests() {
+    let test_dir = Path::new("runtime/csharp/Serde.Tests");
+    dotnet_build(&test_dir);
+    run_nunit(&test_dir);
+}
+
 #[test]
 fn test_csharp_bcs_runtime_on_simple_data() {
     let (dir, _tmp) = create_test_dir("test_csharp_runtime_on_simple_data");
@@ -138,6 +146,8 @@ fn test_csharp_runtime_on_simple_data(dir: PathBuf, runtime: Runtime) {
     match runtime {
         Runtime::Bincode => installer.install_bincode_runtime().unwrap(),
         Runtime::Bcs => installer.install_bcs_runtime().unwrap(),
+        #[cfg(feature = "postcard")]
+        Runtime::Postcard => installer.install_postcard_runtime().unwrap(),
     }
     installer.install_module(&config, &registry).unwrap();
 
@@ -231,6 +241,8 @@ fn test_csharp_runtime_on_supported_types(dir: PathBuf, runtime: Runtime) {
     match runtime {
         Runtime::Bincode => installer.install_bincode_runtime().unwrap(),
         Runtime::Bcs => installer.install_bcs_runtime().unwrap(),
+        #[cfg(feature = "postcard")]
+        Runtime::Postcard => installer.install_postcard_runtime().unwrap(),
     }
     installer.install_module(&config, &registry).unwrap();
 

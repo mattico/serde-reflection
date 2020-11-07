@@ -34,6 +34,7 @@ enum Runtime {
     Serde,
     Bincode,
     Bcs,
+    Postcard,
 }
 }
 
@@ -88,6 +89,12 @@ where
             }
             Runtime::Bcs => {
                 encodings.push(Encoding::Bcs);
+            }
+            Runtime::Postcard => {
+                #[cfg(feature = "postcard")]
+                encodings.push(Encoding::Postcard);
+                #[cfg(not(feature = "postcard"))]
+                panic!("serde-generate compiled without postcard support enabled");
             }
             _ => (),
         }
@@ -177,6 +184,12 @@ fn main() {
                     Runtime::Serde => installer.install_serde_runtime().unwrap(),
                     Runtime::Bincode => installer.install_bincode_runtime().unwrap(),
                     Runtime::Bcs => installer.install_bcs_runtime().unwrap(),
+                    Runtime::Postcard => {
+                        #[cfg(feature = "postcard")]
+                        installer.install_postcard_runtime().unwrap();
+                        #[cfg(not(feature = "postcard"))]
+                        panic!("serde-generate compiled without postcard support enabled");
+                    }
                 }
             }
         }

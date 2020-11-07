@@ -61,12 +61,13 @@ pub struct PrimitiveTypes {
     f_u16: u16,
     f_u32: u32,
     f_u64: u64,
-    f_u128: u128,
     f_i8: i8,
     f_i16: i16,
     f_i32: i32,
     f_i64: i64,
-    f_i128: i128,
+    // The following types are not supported by our postcard runtime
+    f_u128: Option<u128>,
+    f_i128: Option<i128>,
     // The following types are not supported by our bincode and BCS runtimes, therefore
     // we don't populate them for testing.
     f_f32: Option<f32>,
@@ -139,19 +140,23 @@ pub fn get_registry() -> Result<Registry> {
 /// Manually generate sample values.
 /// Avoid maps with more than one element when `has_canonical_maps` is false so that
 /// we can test re-serialization.
-pub fn get_sample_values(has_canonical_maps: bool, has_floats: bool) -> Vec<SerdeData> {
+pub fn get_sample_values(
+    has_canonical_maps: bool,
+    has_floats: bool,
+    supports_i128: bool,
+) -> Vec<SerdeData> {
     let v0 = SerdeData::PrimitiveTypes(PrimitiveTypes {
         f_bool: false,
         f_u8: 6,
         f_u16: 5,
         f_u32: 4,
         f_u64: 3,
-        f_u128: 2,
+        f_u128: if supports_i128 { Some(2) } else { None },
         f_i8: 1,
         f_i16: 0,
         f_i32: -1,
         f_i64: -2,
-        f_i128: -3,
+        f_i128: if supports_i128 { Some(-3) } else { None },
         f_f32: if has_floats { Some(0.4) } else { None },
         f_f64: if has_floats { Some(35.21) } else { None },
         f_char: None,
@@ -163,12 +168,12 @@ pub fn get_sample_values(has_canonical_maps: bool, has_floats: bool) -> Vec<Serd
         f_u16: u16::MAX,
         f_u32: u32::MAX,
         f_u64: u64::MAX,
-        f_u128: u128::MAX,
+        f_u128: if supports_i128 { Some(u128::MAX) } else { None },
         f_i8: i8::MIN,
         f_i16: i16::MIN,
         f_i32: i32::MIN,
         f_i64: i64::MIN,
-        f_i128: i128::MIN,
+        f_i128: if supports_i128 { Some(i128::MIN) } else { None },
         f_f32: if has_floats { Some(-4111.0) } else { None },
         f_f64: if has_floats { Some(-0.0021) } else { None },
         f_char: None,
@@ -252,12 +257,12 @@ pub fn get_sample_values(has_canonical_maps: bool, has_floats: bool) -> Vec<Serd
             f_u16: 1,
             f_u32: 2,
             f_u64: 3,
-            f_u128: 4,
+            f_u128: if supports_i128 { Some(4) } else { None },
             f_i8: 5,
             f_i16: 6,
             f_i32: 7,
             f_i64: 8,
-            f_i128: 9,
+            f_i128: if supports_i128 { Some(9) } else { None },
             f_f32: None,
             f_f64: None,
             f_char: None,
@@ -269,12 +274,12 @@ pub fn get_sample_values(has_canonical_maps: bool, has_floats: bool) -> Vec<Serd
                 f_u16: 0,
                 f_u32: 0,
                 f_u64: 0,
-                f_u128: 0,
+                f_u128: if supports_i128 { Some(0) } else { None },
                 f_i8: 0,
                 f_i16: 0,
                 f_i32: 0,
                 f_i64: 0,
-                f_i128: 0,
+                f_i128: if supports_i128 { Some(0) } else { None },
                 f_f32: None,
                 f_f64: None,
                 f_char: None,
@@ -331,10 +336,12 @@ fn get_sample_value_with_long_sequence(length: usize) -> SerdeData {
 }
 
 /// Structure used to factorize code in runtime tests.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Runtime {
     Bcs,
     Bincode,
+    #[cfg(feature = "postcard")]
+    Postcard,
 }
 
 impl std::convert::From<Runtime> for Encoding {
@@ -342,6 +349,8 @@ impl std::convert::From<Runtime> for Encoding {
         match runtime {
             Runtime::Bcs => Encoding::Bcs,
             Runtime::Bincode => Encoding::Bincode,
+            #[cfg(feature = "postcard")]
+            Runtime::Postcard => Encoding::Postcard,
         }
     }
 }
@@ -355,6 +364,10 @@ impl Runtime {
         match self {
             Self::Bcs => "bcs = \"0.1.1\"",
             Self::Bincode => "bincode = \"1.3\"",
+            #[cfg(feature = "postcard")]
+            Self::Postcard => {
+                r#"postcard = { version = "0.5", default-features = false, features = ["use-std"], optional = true }"#
+            }
         }
     }
 
@@ -365,6 +378,8 @@ impl Runtime {
         match self {
             Self::Bcs => bcs::to_bytes(value).unwrap(),
             Self::Bincode => bincode::serialize(value).unwrap(),
+            #[cfg(feature = "postcard")]
+            Self::Postcard => postcard::to_stdvec(value).unwrap(),
         }
     }
 
@@ -375,6 +390,8 @@ impl Runtime {
         match self {
             Self::Bcs => bcs::from_bytes(bytes).ok(),
             Self::Bincode => bincode::deserialize(bytes).ok(),
+            #[cfg(feature = "postcard")]
+            Self::Postcard => postcard::from_bytes(bytes).ok(),
         }
     }
 
@@ -427,6 +444,8 @@ impl Runtime {
         match self {
             Self::Bcs => "bcs::to_bytes",
             Self::Bincode => "bincode::serialize",
+            #[cfg(feature = "postcard")]
+            Self::Postcard => "postcard::to_stdvec",
         }
     }
 
@@ -434,6 +453,8 @@ impl Runtime {
         match self {
             Self::Bcs => "bcs::from_bytes",
             Self::Bincode => "bincode::deserialize",
+            #[cfg(feature = "postcard")]
+            Self::Postcard => "postcard::from_bytes",
         }
     }
 
@@ -443,6 +464,18 @@ impl Runtime {
         match self {
             Self::Bcs => true,
             Self::Bincode => false,
+            #[cfg(feature = "postcard")]
+            Self::Postcard => false,
+        }
+    }
+
+    /// Whether the encoding supports 128-bit integers.
+    pub fn supports_i128(self) -> bool {
+        match self {
+            Self::Bcs => true,
+            Self::Bincode => true,
+            #[cfg(feature = "postcard")]
+            Self::Postcard => false,
         }
     }
 
@@ -451,6 +484,8 @@ impl Runtime {
         match self {
             Self::Bcs => false,
             Self::Bincode => true,
+            #[cfg(feature = "postcard")]
+            Self::Postcard => true,
         }
     }
 
@@ -458,6 +493,8 @@ impl Runtime {
         match self {
             Self::Bcs => Some(bcs::MAX_SEQUENCE_LENGTH),
             Self::Bincode => None,
+            #[cfg(feature = "postcard")]
+            Self::Postcard => None,
         }
     }
 
@@ -465,11 +502,17 @@ impl Runtime {
         match self {
             Self::Bcs => Some(bcs::MAX_CONTAINER_DEPTH),
             Self::Bincode => None,
+            #[cfg(feature = "postcard")]
+            Self::Postcard => None,
         }
     }
 
     pub fn get_positive_samples_quick(self) -> Vec<Vec<u8>> {
-        let values = get_sample_values(self.has_canonical_maps(), self.has_floats());
+        let values = get_sample_values(
+            self.has_canonical_maps(),
+            self.has_floats(),
+            self.supports_i128(),
+        );
         let mut positive_samples = Vec::new();
         for value in values {
             for (sample, result) in self.serialize_with_noise_and_deserialize(&value) {
@@ -500,7 +543,11 @@ impl Runtime {
     }
 
     pub fn get_negative_samples(self) -> Vec<Vec<u8>> {
-        let values = get_sample_values(self.has_canonical_maps(), self.has_floats());
+        let values = get_sample_values(
+            self.has_canonical_maps(),
+            self.has_floats(),
+            self.supports_i128(),
+        );
         let mut negative_samples = Vec::new();
         for value in values {
             for (sample, result) in self.serialize_with_noise_and_deserialize(&value) {
@@ -579,18 +626,22 @@ impl Runtime {
         let e = self.serialize::<Vec<()>>(&Vec::new());
         let f0 = self.serialize(&SerdeData::UnitVector(Vec::new()));
         let mut result = f0[..f0.len() - e.len()].to_vec();
+
+        let mut uleb128 = |length: usize| {
+            let mut value = length;
+            while value >= 0x80 {
+                let byte = (value & 0x7f) as u8;
+                result.push(byte | 0x80);
+                value >>= 7;
+            }
+            result.push(value as u8);
+        };
+
         match self {
             Runtime::Bincode => result.append(&mut self.serialize(&(length as u64))),
-            Runtime::Bcs => {
-                // ULEB-128 encoding of the length.
-                let mut value = length;
-                while value >= 0x80 {
-                    let byte = (value & 0x7f) as u8;
-                    result.push(byte | 0x80);
-                    value >>= 7;
-                }
-                result.push(value as u8);
-            }
+            Runtime::Bcs => uleb128(length),
+            #[cfg(feature = "postcard")]
+            Runtime::Postcard => uleb128(length),
         }
         result
     }
@@ -598,7 +649,7 @@ impl Runtime {
 
 #[test]
 fn test_get_sample_values() {
-    assert_eq!(get_sample_values(false, true).len(), 16);
+    assert_eq!(get_sample_values(false, true, true).len(), 16);
 }
 
 #[test]
@@ -693,12 +744,14 @@ PrimitiveTypes:
     - f_u16: U16
     - f_u32: U32
     - f_u64: U64
-    - f_u128: U128
     - f_i8: I8
     - f_i16: I16
     - f_i32: I32
     - f_i64: I64
-    - f_i128: I128
+    - f_u128:
+        OPTION: U128
+    - f_i128:
+        OPTION: I128
     - f_f32:
         OPTION: F32
     - f_f64:
@@ -817,6 +870,12 @@ fn test_bcs_get_sample_with_long_sequence() {
     test_get_sample_with_long_sequence(Runtime::Bcs);
 }
 
+#[test]
+#[cfg(feature = "runtime-testing")]
+fn test_postcard_get_sample_with_long_sequence() {
+    test_get_sample_with_long_sequence(Runtime::Postcard);
+}
+
 // Make sure the direct computation of the serialization of these test values
 // agrees with the usual serialization.
 #[cfg(test)]
@@ -850,6 +909,13 @@ fn test_bincode_samples_with_container_depth() {
 fn test_bcs_samples_with_container_depth() {
     test_get_sample_with_container_depth(Runtime::Bcs);
     test_get_alternate_sample_with_container_depth(Runtime::Bcs);
+}
+
+#[test]
+#[cfg(feature = "runtime-testing")]
+fn test_postcard_samples_with_container_depth() {
+    test_get_sample_with_container_depth(Runtime::Postcard);
+    test_get_alternate_sample_with_container_depth(Runtime::Postcard);
 }
 
 // Make sure the direct computation of the serialization of these test values
@@ -916,6 +982,12 @@ fn test_bcs_get_positive_samples() {
     assert_eq!(test_get_positive_samples(Runtime::Bcs), 98);
 }
 
+#[test]
+#[cfg(feature = "runtime-testing")]
+fn test_postcard_get_positive_samples() {
+    assert_eq!(test_get_positive_samples(Runtime::Postcard), 89);
+}
+
 // Make sure all the "positive" samples successfully deserialize with the reference Rust
 // implementation.
 #[cfg(test)]
@@ -940,6 +1012,12 @@ fn test_bcs_get_negative_samples() {
     assert_eq!(test_get_negative_samples(Runtime::Bcs), 61);
 }
 
+#[test]
+#[cfg(feature = "runtime-testing")]
+fn test_postcard_get_negative_samples() {
+    assert_eq!(test_get_negative_samples(Runtime::Postcard), 45);
+}
+
 // Make sure all the "negative" samples fail to deserialize with the reference Rust
 // implementation.
 #[cfg(test)]
@@ -956,6 +1034,17 @@ fn test_get_negative_samples(runtime: Runtime) -> usize {
 fn test_bcs_serialize_with_noise_and_deserialize() {
     let value = "\u{10348}.".to_string();
     let samples = Runtime::Bcs.serialize_with_noise_and_deserialize(&value);
+    // 1 for original encoding
+    // 1 for each byte in the serialization (value.len() + 1)
+    // 1 for added incorrect 5-byte UTF8-like codepoint
+    assert_eq!(samples.len(), value.len() + 3);
+}
+
+#[test]
+#[cfg(feature = "runtime-testing")]
+fn test_postcard_serialize_with_noise_and_deserialize() {
+    let value = "\u{10348}.".to_string();
+    let samples = Runtime::Postcard.serialize_with_noise_and_deserialize(&value);
     // 1 for original encoding
     // 1 for each byte in the serialization (value.len() + 1)
     // 1 for added incorrect 5-byte UTF8-like codepoint

@@ -466,4 +466,9 @@ impl crate::SourceInstaller for Installer {
         )?;
         Ok(())
     }
+
+    #[cfg(feature = "postcard")]
+    fn install_postcard_runtime(&self) -> std::result::Result<(), Self::Error> {
+        Err("Postcard not implemented for Python".into())
+    }
 }

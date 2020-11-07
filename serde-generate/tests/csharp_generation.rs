@@ -26,6 +26,8 @@ fn test_that_csharp_code_compiles_with_config(
     installer.install_serde_runtime().unwrap();
     installer.install_bincode_runtime().unwrap();
     installer.install_bcs_runtime().unwrap();
+    #[cfg(feature = "postcard")]
+    installer.install_postcard_runtime().unwrap();
 
     let proj_path = dir_path.join(config.module_name().replace(".", "/"));
     {
@@ -77,6 +79,14 @@ fn test_that_csharp_code_compiles_with_bcs_and_extra_nesting() {
 fn test_that_csharp_code_compiles_with_bincode() {
     let config =
         CodeGeneratorConfig::new("Generated".to_string()).with_encodings(vec![Encoding::Bincode]);
+    test_that_csharp_code_compiles_with_config(&config);
+}
+
+#[cfg(feature = "postcard")]
+#[test]
+fn test_that_csharp_code_compiles_with_postcard() {
+    let config = CodeGeneratorConfig::new("Serde.Generated".to_string())
+        .with_encodings(vec![Encoding::Postcard]);
     test_that_csharp_code_compiles_with_config(&config);
 }
 
