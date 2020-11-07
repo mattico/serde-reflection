@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30626.31
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serde", "serde\Serde.csproj", "{695117C5-24FE-4EC7-9FA6-21BF3147FD35}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serde.Bincode", "Serde.Bincode\Serde.Bincode.csproj", "{5D00E1FE-2D58-47B0-87F8-82533B5F936B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serde.Lcs", "Serde.Lcs\Serde.Lcs.csproj", "{7B34D9AE-FBF2-4F52-9D01-213BF4F77696}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{695117C5-24FE-4EC7-9FA6-21BF3147FD35}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{695117C5-24FE-4EC7-9FA6-21BF3147FD35}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{695117C5-24FE-4EC7-9FA6-21BF3147FD35}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{695117C5-24FE-4EC7-9FA6-21BF3147FD35}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D00E1FE-2D58-47B0-87F8-82533B5F936B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D00E1FE-2D58-47B0-87F8-82533B5F936B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D00E1FE-2D58-47B0-87F8-82533B5F936B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D00E1FE-2D58-47B0-87F8-82533B5F936B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B34D9AE-FBF2-4F52-9D01-213BF4F77696}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B34D9AE-FBF2-4F52-9D01-213BF4F77696}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B34D9AE-FBF2-4F52-9D01-213BF4F77696}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B34D9AE-FBF2-4F52-9D01-213BF4F77696}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B66F5BB1-33C6-40DB-972D-F987B9A335C0}
+	EndGlobalSection
+EndGlobal
