@@ -117,6 +117,6 @@ namespace Serde
 
         public void serialize_option_tag(bool value) => output.Write(value);
 
-        public long get_buffer_offset() => output.BaseStream.Position;
+        public int get_buffer_offset() => (int)output.BaseStream.Position;
     }
 }

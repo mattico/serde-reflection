@@ -101,7 +101,11 @@ impl<'a> CodeGenerator<'a> {
         };
 
         emitter.output_preamble()?;
-        emitter.output_container(name, format)
+        emitter.output_open_namespace()?;
+        emitter.output_container(name, format)?;
+        emitter.output_close_namespace()?;
+
+        Ok(())
     }
 
     fn write_helper_class(
@@ -136,6 +140,7 @@ where
             self.out,
             r"using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 using AD.FunctionalExtensions;"
         )?;
@@ -218,7 +223,7 @@ using AD.FunctionalExtensions;"
         use Format::*;
         match format {
             TypeName(x) => self.quote_qualified_name(x),
-            Unit => "Serde.Unit".into(),
+            Unit => "Unit".into(),
             Bool => "bool".into(),
             I8 => "sbyte".into(),
             I16 => "short".into(),
@@ -234,7 +239,7 @@ using AD.FunctionalExtensions;"
             F64 => "double".into(),
             Char => "char".into(),
             Str => "string".into(),
-            Bytes => "Serde.Bytes".into(),
+            Bytes => "Bytes".into(),
 
             Option(format) => format!(
                 "Option<{}>",
@@ -302,7 +307,7 @@ using AD.FunctionalExtensions;"
                 })
                 .unwrap();
         }
-        writeln!(self.out, "sealed class TraitHelpers {{")?;
+        writeln!(self.out, "static class TraitHelpers {{")?;
         let reserved_names = &[];
         self.enter_class("TraitHelpers", reserved_names);
         for (mangled_name, subtype) in &subtypes {
@@ -385,7 +390,7 @@ using AD.FunctionalExtensions;"
 
         write!(
             self.out,
-            "static void serialize_{}({} value, Serde.ISerializer serializer) {{",
+            "public static void serialize_{}({} value, ISerializer serializer) {{",
             name,
             self.quote_type(format0)
         )?;
@@ -426,7 +431,7 @@ foreach (var item in value) {{
 serializer.serialize_len(value.Count);
 int[] offsets = new int[value.Count];
 int count = 0;
-foreach (var entry in serializer.get_ordered_entries(value)) {{
+foreach (var entry in value) {{
     offsets[count++] = serializer.get_buffer_offset();
     {}
     {}
@@ -441,7 +446,7 @@ serializer.sort_map_entries(offsets);
             Tuple(formats) => {
                 writeln!(self.out)?;
                 for (index, format) in formats.iter().enumerate() {
-                    let expr = format!("value.field{}", index);
+                    let expr = format!("value.Item{}", index + 1);
                     writeln!(self.out, "{}", self.quote_serialize_value(&expr, format))?;
                 }
             }
@@ -473,7 +478,7 @@ foreach (var item in value) {{
 
         write!(
             self.out,
-            "static {} deserialize_{}(Serde.IDeserializer deserializer) {{",
+            "public static {} deserialize_{}(IDeserializer deserializer) {{",
             self.quote_type(format0),
             name,
         )?;
@@ -666,7 +671,7 @@ return obj;
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic {} void serialize(Serde.ISerializer serializer) {{",
+                "\npublic {} void serialize(ISerializer serializer) {{",
                 fn_mods
             )?;
             self.out.indent();
@@ -696,15 +701,14 @@ return obj;
             if variant_index.is_none() {
                 writeln!(
                     self.out,
-                    "\npublic static {} {} deserialize(Serde.IDeserializer deserializer) {{",
+                    "\npublic static {} {} deserialize(IDeserializer deserializer) {{",
                     fn_mods,
                     name,
                 )?;
             } else {
                 writeln!(
                     self.out,
-                    "\nstatic {} {} load(Serde.IDeserializer deserializer) {{",
-                    fn_mods,
+                    "\ninternal static {} load(IDeserializer deserializer) {{",
                     name,
                 )?;
             }
@@ -731,7 +735,7 @@ return obj;
             }
         }
         // Equality
-        write!(self.out, "\npublic override bool equals(Object obj) {{")?;
+        write!(self.out, "\npublic override bool Equals(object obj) {{")?;
         self.out.indent();
         writeln!(
             self.out,
@@ -782,7 +786,7 @@ if (GetType() != obj.GetType()) return false;
     ) -> Result<()> {
         // Beginning of builder class
         writeln!(self.out)?;
-        writeln!(self.out, "public static class Builder {{")?;
+        writeln!(self.out, "public class Builder {{")?;
         let reserved_names = &[];
         self.enter_class("Builder", reserved_names);
         // Fields
@@ -834,11 +838,11 @@ if (GetType() != obj.GetType()) return false;
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic abstract void serialize(Serde.ISerializer serializer);"
+                "\npublic abstract void serialize(ISerializer serializer);"
             )?;
             write!(
                 self.out,
-                "\npublic static {} deserialize(Serde.IDeserializer deserializer) {{",
+                "\npublic static {} deserialize(IDeserializer deserializer) {{",
                 name
             )?;
             self.out.indent();
@@ -858,7 +862,7 @@ switch (index) {{"#,
             }
             writeln!(
                 self.out,
-                "default: throw new Serde.DeserializationException(\"Unknown variant index for {}: \" + index);",
+                "default: throw new DeserializationException(\"Unknown variant index for {}: \" + index);",
                 name,
             )?;
             self.out.unindent();
@@ -882,7 +886,7 @@ switch (index) {{"#,
             self.out,
             r#"
 public byte[] {0}Serialize()  {{
-    Serde.ISerializer serializer = new Serde.{0}.{0}Serializer();
+    ISerializer serializer = new {0}.{0}Serializer();
     serialize(serializer);
     return serializer.get_bytes();
 }}"#,
@@ -898,14 +902,14 @@ public byte[] {0}Serialize()  {{
         writeln!(
             self.out,
             r#"
-public static {0} {1}Deserialize(ReadOnlySpan<byte> input) {{
+public static {0} {1}Deserialize(Stream input) {{
     if (input == null) {{
-         throw new Serde.DeserializationException("Cannot deserialize null array");
+         throw new DeserializationException("Cannot deserialize null array");
     }}
-    Serde.IDeserializer deserializer = new Serde.{1}.{1}Deserializer(input);
+    IDeserializer deserializer = new {1}.{1}Deserializer(input);
     {0} value = deserialize(deserializer);
     if (deserializer.get_buffer_offset() < input.Length) {{
-         throw new Serde.DeserializationException("Some input bytes were not read");
+         throw new DeserializationException("Some input bytes were not read");
     }}
     return value;
 }}"#,
@@ -987,15 +991,15 @@ impl crate::SourceInstaller for Installer {
 
     fn install_bincode_runtime(&self) -> std::result::Result<(), Self::Error> {
         self.install_runtime(
-            include_directory!("runtime/csharp/Serde.Bincode"),
-            "Serde.Bincode",
+            include_directory!("runtime/csharp/Serde/Bincode"),
+            "Serde/Bincode",
         )
     }
 
     fn install_lcs_runtime(&self) -> std::result::Result<(), Self::Error> {
         self.install_runtime(
-            include_directory!("runtime/csharp/Serde.Lcs"),
-            "Serde.Lcs",
+            include_directory!("runtime/csharp/Serde/Lcs"),
+            "Serde/Lcs",
         )
     }
 }

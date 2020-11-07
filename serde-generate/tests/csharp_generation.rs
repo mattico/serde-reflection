@@ -4,7 +4,7 @@
 use serde_generate::{csharp, test_utils, CodeGeneratorConfig, Encoding};
 use std::collections::BTreeMap;
 use std::process::Command;
-use tempfile::{tempdir, TempDir};
+use tempfile::tempdir;
 
 fn test_that_csharp_code_compiles_with_config(
     config: &CodeGeneratorConfig,
@@ -13,29 +13,21 @@ fn test_that_csharp_code_compiles_with_config(
 
     let registry = test_utils::get_registry().unwrap();
     let dir = tempdir().unwrap();
-    let dir_path = dir.path();
 
-    let installer = csharp::Installer::new(dir_path.to_path_buf());
+    let installer = csharp::Installer::new(dir.path().to_path_buf());
     installer.install_module(&config, &registry).unwrap();
     installer.install_serde_runtime().unwrap();
     installer.install_bincode_runtime().unwrap();
     installer.install_lcs_runtime().unwrap();
 
-    std::fs::copy("runtime/csharp/Serde.sln", dir_path.join("Serde.sln")).unwrap();
-
-    let lcs_test_dir = dir_path.join("Serde.Lcs.Tests");
-    std::fs::create_dir(&lcs_test_dir).unwrap();
-    std::fs::copy("runtime/csharp/Serde.Lcs.Tests/Serde.Lcs.Tests.csproj", 
-        &lcs_test_dir.join("Serde.Lcs.Tests.csproj")).unwrap();
-
     let status = Command::new("dotnet")
         .arg("build")
-        .current_dir(dir_path)
+        .current_dir(dir.path().join("Serde"))
         .status()
         .unwrap();
     assert!(status.success());
 
-    dir_path.to_path_buf()
+    dir.path().join("Serde").to_path_buf()
 }
 
 #[test]

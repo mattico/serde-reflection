@@ -50,7 +50,7 @@ namespace Serde {
 
         void decrease_container_depth();
 
-        long get_buffer_offset();
+        int get_buffer_offset();
 
         void sort_map_entries(int[] offsets);
 

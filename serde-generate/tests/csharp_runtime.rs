@@ -13,6 +13,32 @@ use std::process::Command;
 use tempfile::tempdir;
 
 #[test]
+fn test_csharp_lcs_runtime_tests() {
+    use serde_generate::SourceInstaller;
+
+    let registry = test_utils::get_registry().unwrap();
+    let dir = tempdir().unwrap();
+
+    let installer = csharp::Installer::new(dir.path().to_path_buf());
+    installer.install_serde_runtime().unwrap();
+    installer.install_lcs_runtime().unwrap();
+
+    let lcs_test_dir = dir.path().join("Serde.Tests");
+    std::fs::create_dir(&lcs_test_dir).unwrap();
+    std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
+        &lcs_test_dir.join("Serde.Tests.csproj")).unwrap();
+    std::fs::copy("runtime/csharp/Serde.Tests/TestLcs.cs", 
+        &lcs_test_dir.join("TestLcs.cs")).unwrap();
+
+    let status = Command::new("dotnet")
+        .arg("build")
+        .current_dir(lcs_test_dir)
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+#[test]
 fn test_csharp_lcs_runtime_on_simple_data() {
     test_csharp_runtime_on_simple_data(Runtime::Lcs);
 }
