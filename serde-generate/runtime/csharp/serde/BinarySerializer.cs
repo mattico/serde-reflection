@@ -53,21 +53,13 @@ namespace Serde
 
         public void serialize_unit(Unit value) {}
 
-        public void serialize_char(char value) {
-            throw new SerializationException("Not implemented: serialize_char");
-        }
+        public void serialize_char(Rune value) => throw new NotImplementedException();
 
-        public void serialize_f32(float value) {
-            throw new SerializationException("Not implemented: serialize_f32");
-        }
+        public void serialize_f32(float value) => throw new NotImplementedException();
 
-        public void serialize_f64(double value) {
-            throw new SerializationException("Not implemented: serialize_f64");
-        }
+        public void serialize_f64(double value) => throw new NotImplementedException();
 
-        public void serialize_u8(byte value) {
-            output.Write(value);
-        }
+        public void serialize_u8(byte value) => output.Write(value);
 
         public void serialize_u16(ushort value) => output.Write(value);
 

@@ -142,6 +142,7 @@ where
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Numerics;
 using AD.FunctionalExtensions;"
         )?;
@@ -238,7 +239,7 @@ using AD.FunctionalExtensions;"
             U128 => "BigInteger".into(),
             F32 => "float".into(),
             F64 => "double".into(),
-            Char => "char".into(),
+            Char => "Rune".into(),
             Str => "string".into(),
             Bytes => "Bytes".into(),
 

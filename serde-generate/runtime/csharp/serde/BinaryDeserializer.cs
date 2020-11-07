@@ -57,7 +57,7 @@ namespace Serde {
 
         public Unit deserialize_unit() => new Unit();
 
-        public virtual char deserialize_char() => throw new NotImplementedException();
+        public virtual Rune deserialize_char() => throw new NotImplementedException();
 
         public virtual float deserialize_f32() => throw new NotImplementedException();
 
@@ -88,10 +88,7 @@ namespace Serde {
 
         public long deserialize_i64() => input.ReadInt64();
 
-        public BigInteger deserialize_i128() {
-            byte[] content = input.ReadBytes(16).Reverse().ToArray();
-            return new BigInteger(content);
-        }
+        public BigInteger deserialize_i128() => new BigInteger(input.ReadBytes(16));
 
         public bool deserialize_option_tag() => input.ReadBoolean();
 

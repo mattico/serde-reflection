@@ -3,6 +3,7 @@
 
 using System;
 using System.Numerics;
+using System.Text;
 
 namespace Serde {
     public interface ISerializer {
@@ -14,7 +15,7 @@ namespace Serde {
 
         void serialize_unit(Unit value);
 
-        void serialize_char(char value);
+        void serialize_char(Rune value);
 
         void serialize_f32(float value);
 

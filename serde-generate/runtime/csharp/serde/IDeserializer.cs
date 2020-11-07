@@ -3,6 +3,7 @@
 
 using System;
 using System.Numerics;
+using System.Text;
 
 namespace Serde {
     public interface IDeserializer {
@@ -14,7 +15,7 @@ namespace Serde {
 
         Unit deserialize_unit();
 
-        char deserialize_char();
+        Rune deserialize_char();
 
         float deserialize_f32();
 
