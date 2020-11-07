@@ -187,9 +187,9 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
         .iter()
         .map(|bytes| quote_bytes(bytes))
         .collect::<Vec<_>>()
-        .join(",\n\tnew byte[] ");
+        .join(",\n\t\t\tnew byte[] ");
     if positive_encodings.len() > 0 {
-        positive_encodings = format!("\nnew byte[] {}", positive_encodings);
+        positive_encodings = format!("\n\t\t\tnew byte[] {}", positive_encodings);
     }
 
     let mut negative_encodings = runtime
@@ -197,9 +197,9 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
         .iter()
         .map(|bytes| quote_bytes(bytes))
         .collect::<Vec<_>>()
-        .join(",\n\tnew byte[] ");
+        .join(",\n\t\t\tnew byte[] ");
     if negative_encodings.len() > 0 {
-        negative_encodings = format!("\nnew byte[] {}", negative_encodings);
+        negative_encodings = format!("\n\t\t\tnew byte[] {}", negative_encodings);
     }
 
     let mut source = File::create(test_dir.join("TestRuntime.cs")).unwrap();
@@ -207,8 +207,6 @@ fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
         source,
         r#"
 using System;
-using System.Collections.Generic;
-using System.Numerics;
 using System.Linq;
 using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -234,20 +232,19 @@ namespace Serde.Tests {{
                     try {{
                         SerdeData test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
                         Assert.AreNotEqual(test2, test);
-                    }} catch (DeserializationException) {{
-                        // All good
-                    }}
+                    }} 
+                    catch (NotImplementedException) {{ }} 
+                    catch (DeserializationException) {{ }}
                 }}
-    
             }}
     
             foreach (byte[] input in negative_inputs) {{
                 try {{
                     SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
                     throw new Exception("Input should fail to deserialize: " + input.ToString());
-                }} catch (DeserializationException) {{
-                        // All good
                 }}
+                catch (NotImplementedException) {{ }} 
+                catch (DeserializationException) {{ }}
             }}
         }}
     }}
