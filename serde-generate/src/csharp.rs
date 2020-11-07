@@ -141,6 +141,7 @@ where
             r"using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using AD.FunctionalExtensions;"
         )?;
@@ -656,14 +657,14 @@ return obj;
             name,
             fields
                 .iter()
-                .map(|f| format!("{} {}", self.quote_type(&f.value), &f.name))
+                .map(|f| format!("{} _{}", self.quote_type(&f.value), &f.name))
                 .collect::<Vec<_>>()
                 .join(", ")
         )?;
         self.out.indent();
         // TODO: check arguments for null?
         for field in fields {
-            writeln!(self.out, "this.{} = {};", &field.name, &field.name)?;
+            writeln!(self.out, "{} = _{};", &field.name, &field.name)?;
         }
         self.out.unindent();
         writeln!(self.out, "}}")?;
@@ -747,11 +748,19 @@ if (GetType() != obj.GetType()) return false;
             name,
         )?;
         for field in fields {
-            writeln!(
-                self.out,
-                "if (!this.{0}.Equals(other.{0})) {{ return false; }}",
-                &field.name,
-            )?;
+            if let Format::Seq(_) = field.value {
+                writeln!(
+                    self.out,
+                    "if (!Enumerable.SequenceEqual({0}, other.{0})) return false;",
+                    &field.name,
+                )?;
+            } else {
+                writeln!(
+                    self.out,
+                    "if (!{0}.Equals(other.{0})) return false;",
+                    &field.name,
+                )?;
+            }
         }
         writeln!(self.out, "return true;")?;
         self.out.unindent();
@@ -763,7 +772,7 @@ if (GetType() != obj.GetType()) return false;
         for field in fields {
             writeln!(
                 self.out,
-                "value = 31 * value + this.{0}.GetHashCode();",
+                "value = 31 * value + {0}.GetHashCode();",
                 &field.name
             )?;
         }

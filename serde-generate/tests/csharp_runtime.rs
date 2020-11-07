@@ -37,7 +37,6 @@ fn run_mstest(proj_dir: &Path) {
 fn test_csharp_lcs_runtime_tests() {
     use serde_generate::SourceInstaller;
 
-    let registry = test_utils::get_registry().unwrap();
     let dir = tempdir().unwrap();
 
     let installer = csharp::Installer::new(dir.path().to_path_buf());
@@ -71,8 +70,9 @@ fn test_csharp_runtime_on_simple_data(runtime: Runtime) {
 
     let installer = csharp::Installer::new(dir.path().to_path_buf());
     installer.install_serde_runtime().unwrap();
+    installer.install_bincode_runtime().unwrap();
 
-    let test_dir = dir.path().join("Serde.Tests");
+    let test_dir = dirdir.path().join("Serde.Tests");
     std::fs::create_dir(&test_dir).unwrap();
     std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
         &test_dir.join("Serde.Tests.csproj")).unwrap();
@@ -97,7 +97,7 @@ fn test_csharp_runtime_on_simple_data(runtime: Runtime) {
         r#"
 using System;
 using System.Collections.Generic;
-using System.Numerics;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Serde.Tests {{
@@ -107,9 +107,9 @@ namespace Serde.Tests {{
         public void TestRoundTrip() {{
             byte[] input = new byte[] {{{0}}};
 
-            Test test = Test.{1}Deserialize(input);
+            Test test = Test.{1}Deserialize(new MemoryStream(input));
 
-            List<uint> a = new List(4, 6);
+            List<uint> a = new List<uint>(new uint[] {{ 4, 6 }});
             var b = ((long)-3, (ulong)5);
             Choice c = new Choice.C((byte) 7);
             Test test2 = new Test(a, b, c);
@@ -121,14 +121,14 @@ namespace Serde.Tests {{
             CollectionAssert.AreEqual(input, output);
 
             byte[] input2 = new byte[] {{{0}, 1}};
-            Assert.ThrowsException<DeserializationException>(() => Test.{1}Deserialize(input2));
+            Assert.ThrowsException<DeserializationException>(() => Test.{1}Deserialize(new MemoryStream(input2)));
         }}
     }}
 }}
 "#,
         reference
             .iter()
-            .map(|x| format!("{}", *x as i8))
+            .map(|x| format!("{}", *x as u8))
             .collect::<Vec<_>>()
             .join(", "),
         runtime.name().to_camel_case(),
@@ -154,7 +154,7 @@ fn quote_bytes(bytes: &[u8]) -> String {
         "{{{}}}",
         bytes
             .iter()
-            .map(|x| format!("{}", *x as i8))
+            .map(|x| format!("{}", *x as u8))
             .collect::<Vec<_>>()
             .join(", ")
     )
