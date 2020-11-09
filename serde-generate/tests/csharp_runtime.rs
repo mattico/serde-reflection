@@ -2,18 +2,49 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![cfg(feature = "runtime-testing")]
 
+use heck::CamelCase;
 use serde_generate::{
     csharp, test_utils,
     test_utils::{Choice, Runtime, Test},
-    CodeGeneratorConfig,
-    SourceInstaller,
+    CodeGeneratorConfig, SourceInstaller,
 };
 use std::fs::File;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::tempdir;
-use heck::CamelCase;
-use std::path::Path;
+
+/// Set to `false` to have tests generate into non-temporary directories for inspection.
+/// NOTE: Set this to `true` before committing or merging!
+const TEST_USE_TEMP_DIRS: bool = true;
+
+/// Returns:
+/// 1. A `PathBuf` to the directory to write test data into
+/// 2. Optionally, a `tempfile::TempDir` which deletes the directory when it goes out of scope
+fn create_test_dir(test_name: &'static str) -> (std::path::PathBuf, Option<tempfile::TempDir>) {
+    if TEST_USE_TEMP_DIRS {
+        let tempdir = tempfile::Builder::new()
+            .suffix(&format!("_{}", test_name))
+            .tempdir()
+            .unwrap();
+        (tempdir.path().to_path_buf(), Some(tempdir))
+    } else {
+        let mut tries = 0;
+        while tries < 20 {
+            let test_dir_name = if tries == 0 {
+                test_name.into()
+            } else {
+                format!("{}_{}", test_name, tries)
+            };
+            let dir = std::path::Path::new("tests").join(test_dir_name).to_path_buf();
+            match std::fs::create_dir(&dir) {
+                Ok(()) => return (dir, None),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => tries += 1,
+                Err(e) => panic!("Error creating test directory: {:?}", e),
+            }
+        }
+        panic!("Error creating test directory: Too many existing test directories");
+    }
+}
 
 fn dotnet_build(proj_dir: &Path) {
     let status = Command::new("dotnet")
@@ -33,57 +64,68 @@ fn run_mstest(proj_dir: &Path) {
     assert!(status.success());
 }
 
+fn copy_test_project(root_dir: &Path, copy_runtime_tests: bool) -> PathBuf {
+    let test_dir = root_dir.join("Serde.Tests").to_path_buf();
+
+    std::fs::create_dir(&test_dir).unwrap();
+    std::fs::copy(
+        "runtime/csharp/Serde.Tests/Serde.Tests.csproj",
+        &test_dir.join("Serde.Tests.csproj"),
+    )
+    .unwrap();
+
+    if copy_runtime_tests {
+        std::fs::copy(
+            "runtime/csharp/Serde.Tests/TestLcs.cs",
+            &test_dir.join("TestLcs.cs"),
+        )
+        .unwrap();
+    }
+
+    test_dir
+}
+
 #[test]
 fn test_csharp_lcs_runtime_tests() {
-    use serde_generate::SourceInstaller;
+    let (dir, _tmp) = create_test_dir("test_csharp_lcs_runtime_tests");
+    let test_dir = copy_test_project(&dir, true);
 
-    let dir = tempdir().unwrap();
-
-    let installer = csharp::Installer::new(dir.path().to_path_buf());
+    let installer = csharp::Installer::new(dir);
     installer.install_serde_runtime().unwrap();
     installer.install_lcs_runtime().unwrap();
 
-    let lcs_test_dir = dir.path().join("Serde.Tests");
-    std::fs::create_dir(&lcs_test_dir).unwrap();
-    std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
-        &lcs_test_dir.join("Serde.Tests.csproj")).unwrap();
-    std::fs::copy("runtime/csharp/Serde.Tests/TestLcs.cs", 
-        &lcs_test_dir.join("TestLcs.cs")).unwrap();
-
-    dotnet_build(&lcs_test_dir);
-    run_mstest(&lcs_test_dir);
+    dotnet_build(&test_dir);
+    run_mstest(&test_dir);
 }
 
 #[test]
 fn test_csharp_lcs_runtime_on_simple_data() {
-    test_csharp_runtime_on_simple_data(Runtime::Lcs);
+    let (dir, _tmp) = create_test_dir("test_csharp_runtime_on_simple_data");
+    test_csharp_runtime_on_simple_data(dir, Runtime::Lcs);
 }
 
 #[test]
 fn test_csharp_bincode_runtime_on_simple_data() {
-    test_csharp_runtime_on_simple_data(Runtime::Bincode);
+    let (dir, _tmp) = create_test_dir("test_csharp_bincode_runtime_on_simple_data");
+    test_csharp_runtime_on_simple_data(dir, Runtime::Bincode);
 }
 
-fn test_csharp_runtime_on_simple_data(runtime: Runtime) {
-    let registry = test_utils::get_simple_registry().unwrap();
-    let dir = tempdir().unwrap();
+fn test_csharp_runtime_on_simple_data(dir: PathBuf, runtime: Runtime) {
+    let test_dir = copy_test_project(&dir, false);
 
-    let installer = csharp::Installer::new(dir.path().to_path_buf());
+    let registry = test_utils::get_simple_registry().unwrap();
+
+    let installer = csharp::Installer::new(dir.clone());
     installer.install_serde_runtime().unwrap();
     installer.install_bincode_runtime().unwrap();
     installer.install_lcs_runtime().unwrap();
 
-    let test_dir = dir.path().join("Serde.Tests");
-    std::fs::create_dir(&test_dir).unwrap();
-    std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
-        &test_dir.join("Serde.Tests.csproj")).unwrap();
-
-    // TODO: Is the CodeGenerator supposed to copy the serde runtime?
+    // Generates code into `Serde/Tests`
     let config =
         CodeGeneratorConfig::new("Serde.Tests".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
     generator
-        .write_source_files(dir.path().to_path_buf(), &registry)
+        .write_source_files(dir, &registry)
         .unwrap();
 
     let reference = runtime.serialize(&Test {
@@ -142,12 +184,14 @@ namespace Serde.Tests {{
 
 #[test]
 fn test_csharp_lcs_runtime_on_supported_types() {
-    test_csharp_runtime_on_supported_types(Runtime::Lcs);
+    let (dir, _tmp) = create_test_dir("test_csharp_lcs_runtime_on_supported_types");
+    test_csharp_runtime_on_supported_types(dir, Runtime::Lcs);
 }
 
 #[test]
 fn test_csharp_bincode_runtime_on_supported_types() {
-    test_csharp_runtime_on_supported_types(Runtime::Bincode);
+    let (dir, _tmp) = create_test_dir("test_csharp_bincode_runtime_on_supported_types");
+    test_csharp_runtime_on_supported_types(dir, Runtime::Bincode);
 }
 
 fn quote_bytes(bytes: &[u8]) -> String {
@@ -161,25 +205,22 @@ fn quote_bytes(bytes: &[u8]) -> String {
     )
 }
 
-fn test_csharp_runtime_on_supported_types(runtime: Runtime) {
-    let registry = test_utils::get_registry().unwrap();
-    let dir = tempdir().unwrap();
+fn test_csharp_runtime_on_supported_types(dir: PathBuf, runtime: Runtime) {
+    let test_dir = copy_test_project(&dir, false);
 
-    let installer = csharp::Installer::new(dir.path().to_path_buf());
+    let registry = test_utils::get_registry().unwrap();
+
+    let installer = csharp::Installer::new(dir.clone());
     installer.install_serde_runtime().unwrap();
     installer.install_bincode_runtime().unwrap();
     installer.install_lcs_runtime().unwrap();
 
-    let test_dir = dir.path().join("Serde.Tests");
-    std::fs::create_dir(&test_dir).unwrap();
-    std::fs::copy("runtime/csharp/Serde.Tests/Serde.Tests.csproj", 
-        &test_dir.join("Serde.Tests.csproj")).unwrap();
-
+    // Generates code into `Serde/Tests`
     let config =
         CodeGeneratorConfig::new("Serde.Tests".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
     generator
-        .write_source_files(dir.path().to_path_buf(), &registry)
+        .write_source_files(dir, &registry)
         .unwrap();
 
     let mut positive_encodings = runtime
