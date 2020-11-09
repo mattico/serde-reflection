@@ -35,7 +35,9 @@ fn create_test_dir(test_name: &'static str) -> (std::path::PathBuf, Option<tempf
             } else {
                 format!("{}_{}", test_name, tries)
             };
-            let dir = std::path::Path::new("tests").join(test_dir_name).to_path_buf();
+            let dir = std::path::Path::new("tests")
+                .join(test_dir_name)
+                .to_path_buf();
             match std::fs::create_dir(&dir) {
                 Ok(()) => return (dir, None),
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => tries += 1,
@@ -59,7 +61,8 @@ fn run_nunit(proj_dir: &Path) {
     let status = Command::new("dotnet")
         .arg("test")
         .current_dir(proj_dir)
-        .status().unwrap();
+        .status()
+        .unwrap();
     assert!(status.success());
 }
 
@@ -94,8 +97,7 @@ fn test_csharp_lcs_runtime_tests() {
     installer.install_lcs_runtime().unwrap();
 
     dotnet_build(&test_dir);
-    run_nunit
-(&test_dir);
+    run_nunit(&test_dir);
 }
 
 #[test]
@@ -124,9 +126,7 @@ fn test_csharp_runtime_on_simple_data(dir: PathBuf, runtime: Runtime) {
     let config =
         CodeGeneratorConfig::new("Serde.Tests".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
-    generator
-        .write_source_files(dir, &registry)
-        .unwrap();
+    generator.write_source_files(dir, &registry).unwrap();
 
     let reference = runtime.serialize(&Test {
         a: vec![4, 6],
@@ -218,9 +218,7 @@ fn test_csharp_runtime_on_supported_types(dir: PathBuf, runtime: Runtime) {
     let config =
         CodeGeneratorConfig::new("Serde.Tests".to_string()).with_encodings(vec![runtime.into()]);
     let generator = csharp::CodeGenerator::new(&config);
-    generator
-        .write_source_files(dir, &registry)
-        .unwrap();
+    generator.write_source_files(dir, &registry).unwrap();
 
     let positive_encodings = runtime
         .get_positive_samples_quick()
@@ -246,8 +244,8 @@ using NUnit.Framework;
 namespace Serde.Tests {{
     public class TestRuntime {{
         static void TestPassInput(byte[] input) {{
-            SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
-            byte[] output = test.{2}Serialize();
+            SerdeData test = SerdeData.{0}Deserialize(new MemoryStream(input));
+            byte[] output = test.{0}Serialize();
 
             CollectionAssert.AreEqual(input, output);
 
@@ -257,32 +255,44 @@ namespace Serde.Tests {{
                 input2[i] ^= 0x80;
                 SerdeData test2;
                 try {{
-                    test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
+                    test2 = SerdeData.{0}Deserialize(new MemoryStream(input2));
                 }} 
                 catch (Exception) {{ continue; }}
                 Assert.AreNotEqual(test2, test);
             }}
-        }}"#
-    ).unwrap();
+        }}"#,
+        runtime.name().to_camel_case()
+    )
+    .unwrap();
 
     for (i, input) in positive_encodings.iter().enumerate() {
-        writeln!(source, r#"
+        writeln!(
+            source,
+            r#"
         [Test]
         public void TestPassInput{0}() {{
             byte[] input = new byte[] {1};
             TestPassInput(input);
         }}"#,
-        i, input, runtime.name().to_camel_case()).unwrap();
+            i, input
+        )
+        .unwrap();
     }
 
     for (i, input) in negative_encodings.iter().enumerate() {
-        writeln!(source, r#"
+        writeln!(
+            source,
+            r#"
         [Test]
         public void TestFailInput{0}() {{
             byte[] input = new byte[] {1};
             Assert.Catch(() => SerdeData.{2}Deserialize(new MemoryStream(input)));
         }}"#,
-        i, input, runtime.name().to_camel_case()).unwrap();
+            i,
+            input,
+            runtime.name().to_camel_case()
+        )
+        .unwrap();
     }
 
     writeln!(source, "\t}}\n}}\n").unwrap();
