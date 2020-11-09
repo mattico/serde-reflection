@@ -149,7 +149,7 @@ namespace Serde.Tests {{
         public void TestRoundTrip() {{
             byte[] input = new byte[] {{{0}}};
 
-            Test test = Test.{1}Deserialize(new MemoryStream(input));
+            Test test = Test.{1}Deserialize(input);
 
             List<uint> a = new List<uint>(new uint[] {{ 4, 6 }});
             var b = ((long)-3, (ulong)5);
@@ -163,7 +163,7 @@ namespace Serde.Tests {{
             CollectionAssert.AreEqual(input, output);
 
             byte[] input2 = new byte[] {{{0}, 1}};
-            Assert.Throws<DeserializationException>(() => Test.{1}Deserialize(new MemoryStream(input2)));
+            Assert.Throws<DeserializationException>(() => Test.{1}Deserialize(input2));
         }}
     }}
 }}
@@ -244,7 +244,7 @@ using NUnit.Framework;
 namespace Serde.Tests {{
     public class TestRuntime {{
         static void TestPassInput(byte[] input) {{
-            SerdeData test = SerdeData.{0}Deserialize(new MemoryStream(input));
+            SerdeData test = SerdeData.{0}Deserialize(input);
             byte[] output = test.{0}Serialize();
 
             CollectionAssert.AreEqual(input, output);
@@ -255,7 +255,7 @@ namespace Serde.Tests {{
                 input2[i] ^= 0x80;
                 SerdeData test2;
                 try {{
-                    test2 = SerdeData.{0}Deserialize(new MemoryStream(input2));
+                    test2 = SerdeData.{0}Deserialize(input2);
                 }} 
                 catch (Exception) {{ continue; }}
                 Assert.AreNotEqual(test2, test);
@@ -286,7 +286,7 @@ namespace Serde.Tests {{
         [Test]
         public void TestFailInput{0}() {{
             byte[] input = new byte[] {1};
-            Assert.Catch(() => SerdeData.{2}Deserialize(new MemoryStream(input)));
+            Assert.Catch(() => SerdeData.{2}Deserialize(input));
         }}"#,
             i,
             input,

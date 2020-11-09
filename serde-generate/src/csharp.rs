@@ -922,7 +922,7 @@ public byte[] {0}Serialize()  {{
         writeln!(
             self.out,
             r#"
-public static {0} {1}Deserialize(Stream input) {{
+public static {0} {1}Deserialize(byte[] input) {{
     if (input == null) {{
          throw new DeserializationException("Cannot deserialize null array");
     }}
