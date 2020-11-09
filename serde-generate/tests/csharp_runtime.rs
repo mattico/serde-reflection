@@ -222,25 +222,17 @@ fn test_csharp_runtime_on_supported_types(dir: PathBuf, runtime: Runtime) {
         .write_source_files(dir, &registry)
         .unwrap();
 
-    let mut positive_encodings = runtime
+    let positive_encodings = runtime
         .get_positive_samples_quick()
         .iter()
         .map(|bytes| quote_bytes(bytes))
-        .collect::<Vec<_>>()
-        .join(",\n\t\t\tnew byte[] ");
-    if positive_encodings.len() > 0 {
-        positive_encodings = format!("\n\t\t\tnew byte[] {}", positive_encodings);
-    }
+        .collect::<Vec<_>>();
 
-    let mut negative_encodings = runtime
+    let negative_encodings = runtime
         .get_negative_samples()
         .iter()
         .map(|bytes| quote_bytes(bytes))
-        .collect::<Vec<_>>()
-        .join(",\n\t\t\tnew byte[] ");
-    if negative_encodings.len() > 0 {
-        negative_encodings = format!("\n\t\t\tnew byte[] {}", negative_encodings);
-    }
+        .collect::<Vec<_>>();
 
     let mut source = File::create(test_dir.join("TestRuntime.cs")).unwrap();
     writeln!(
@@ -253,42 +245,47 @@ using NUnit.Framework;
 
 namespace Serde.Tests {{
     public class TestRuntime {{
-        static readonly byte[][] positive_inputs = new byte[][] {{{0}}};
-        static readonly byte[][] negative_inputs = new byte[][] {{{1}}};
+        static void TestPassInput(byte[] input) {{
+            SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
+            byte[] output = test.{2}Serialize();
 
+            CollectionAssert.AreEqual(input, output);
+
+            // Test simple mutations of the input.
+            for (int i = 0; i < input.Length; i++) {{
+                byte[] input2 = input.ToArray();
+                input2[i] ^= 0x80;
+                SerdeData test2;
+                try {{
+                    test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
+                }} 
+                catch (Exception) {{ continue; }}
+                Assert.AreNotEqual(test2, test);
+            }}
+        }}"#
+    ).unwrap();
+
+    for (i, input) in positive_encodings.iter().enumerate() {
+        writeln!(source, r#"
         [Test]
-        public void TestPassFailEncoding() {{
-            foreach (byte[] input in positive_inputs) {{
-                SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
-                byte[] output = test.{2}Serialize();
-    
-                CollectionAssert.AreEqual(input, output);
-    
-                // Test simple mutations of the input.
-                for (int i = 0; i < input.Length; i++) {{
-                    byte[] input2 = input.ToArray();
-                    input2[i] ^= 0x80;
-                    SerdeData test2;
-                    try {{
-                        test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
-                    }} 
-                    catch (Exception) {{ continue; }}
-                    Assert.AreNotEqual(test2, test);
-                }}
-            }}
-    
-            foreach (byte[] input in negative_inputs) {{
-                Assert.Catch(() => SerdeData.{2}Deserialize(new MemoryStream(input)));
-            }}
-        }}
-    }}
-}}
-"#,
-        positive_encodings,
-        negative_encodings,
-        runtime.name().to_camel_case(),
-    )
-    .unwrap();
+        public void TestPassInput{0}() {{
+            byte[] input = new byte[] {1};
+            TestPassInput(input);
+        }}"#,
+        i, input, runtime.name().to_camel_case()).unwrap();
+    }
+
+    for (i, input) in negative_encodings.iter().enumerate() {
+        writeln!(source, r#"
+        [Test]
+        public void TestFailInput{0}() {{
+            byte[] input = new byte[] {1};
+            Assert.Catch(() => SerdeData.{2}Deserialize(new MemoryStream(input)));
+        }}"#,
+        i, input, runtime.name().to_camel_case()).unwrap();
+    }
+
+    writeln!(source, "\t}}\n}}\n").unwrap();
 
     dotnet_build(&test_dir);
     run_nunit(&test_dir);
