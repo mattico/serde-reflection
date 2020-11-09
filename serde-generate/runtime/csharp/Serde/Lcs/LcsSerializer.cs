@@ -14,10 +14,10 @@ namespace Serde.Lcs
 
         private void serialize_u32_as_uleb128(uint value) {
             while ((value >> 7) != 0) {
-                output.Write((value & 0x7f) | 0x80);
+                output.Write((byte)((value & 0x7f) | 0x80));
                 value >>= 7;
             }
-            output.Write(value);
+            output.Write((byte)value);
         }
 
         public override void serialize_len(long value) {

@@ -66,5 +66,17 @@ namespace Serde.Tests
             serializer.sort_map_entries(offsets);
             CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, /**/ 0, /**/ 0, /**/ 0, 0, /**/ 0, 1, 0,  /**/ 1, /**/ 2, 0, 0, 0 });
         }
+
+        [TestMethod]
+        public void TestULEB128Encoding()
+        {
+            LcsSerializer serializer = new LcsSerializer();
+            serializer.serialize_len(0);
+            serializer.serialize_len(1);
+            serializer.serialize_len(127);
+            serializer.serialize_len(128);
+            serializer.serialize_len(3000);
+            CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 0, 1, 127, 128, 1, 184, 23 });
+        }
     }
 }
