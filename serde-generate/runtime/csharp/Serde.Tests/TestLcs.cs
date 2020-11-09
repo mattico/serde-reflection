@@ -1,14 +1,13 @@
 using System;
 using System.Numerics;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 using Serde.Lcs;
 
 namespace Serde.Tests
 {
-    [TestClass]
     public class TestLcs
     {
-        [TestMethod]
+        [Test]
         public void TestSerializeU128()
         {
             LcsSerializer serializer = new LcsSerializer();
@@ -23,12 +22,12 @@ namespace Serde.Tests
             serializer.serialize_u128(BigInteger.Zero);
             CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
 
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_u128(BigInteger.MinusOne));
+            Assert.Throws<ArgumentOutOfRangeException>(() => serializer.serialize_u128(BigInteger.MinusOne));
 
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_u128((BigInteger.One << 128) + 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => serializer.serialize_u128((BigInteger.One << 128) + 1));
         }
 
-        [TestMethod]
+        [Test]
         public void TestSerializeI128()
         {
             LcsSerializer serializer = new LcsSerializer();
@@ -47,12 +46,12 @@ namespace Serde.Tests
             serializer.serialize_i128(-(BigInteger.One << 127));
             CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x80 });
 
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_i128(BigInteger.One << 127));
+            Assert.Throws<ArgumentOutOfRangeException>(() => serializer.serialize_i128(BigInteger.One << 127));
 
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => serializer.serialize_i128(-((BigInteger.One << 127) + 1)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => serializer.serialize_i128(-((BigInteger.One << 127) + 1)));
         }
 
-        [TestMethod]
+        [Test]
         public void TestSliceOrdering()
         {
             LcsSerializer serializer = new LcsSerializer();
@@ -67,7 +66,7 @@ namespace Serde.Tests
             CollectionAssert.AreEqual(serializer.get_bytes(), new byte[] { 255, /**/ 0, /**/ 0, /**/ 0, 0, /**/ 0, 1, 0,  /**/ 1, /**/ 2, 0, 0, 0 });
         }
 
-        [TestMethod]
+        [Test]
         public void TestULEB128Encoding()
         {
             LcsSerializer serializer = new LcsSerializer();

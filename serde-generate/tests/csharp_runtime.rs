@@ -55,11 +55,10 @@ fn dotnet_build(proj_dir: &Path) {
     assert!(status.success());
 }
 
-// TODO: switch to NUnit for better xplat
-fn run_mstest(proj_dir: &Path) {
-    let dll_path = proj_dir.join("bin/Debug/netcoreapp3.1/Serde.Tests.dll");
-    let status = Command::new("C:/Program Files (x86)/Microsoft Visual Studio/2019/Preview/Common7/IDE/CommonExtensions/Microsoft/TestWindow/vstest.console.exe")
-        .arg(&dll_path)
+fn run_nunit(proj_dir: &Path) {
+    let status = Command::new("dotnet")
+        .arg("test")
+        .current_dir(proj_dir)
         .status().unwrap();
     assert!(status.success());
 }
@@ -95,7 +94,8 @@ fn test_csharp_lcs_runtime_tests() {
     installer.install_lcs_runtime().unwrap();
 
     dotnet_build(&test_dir);
-    run_mstest(&test_dir);
+    run_nunit
+(&test_dir);
 }
 
 #[test]
@@ -141,12 +141,11 @@ fn test_csharp_runtime_on_simple_data(dir: PathBuf, runtime: Runtime) {
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace Serde.Tests {{
-    [TestClass]
     public class TestRuntime {{
-        [TestMethod]
+        [Test]
         public void TestRoundTrip() {{
             byte[] input = new byte[] {{{0}}};
 
@@ -164,7 +163,7 @@ namespace Serde.Tests {{
             CollectionAssert.AreEqual(input, output);
 
             byte[] input2 = new byte[] {{{0}, 1}};
-            Assert.ThrowsException<DeserializationException>(() => Test.{1}Deserialize(new MemoryStream(input2)));
+            Assert.Throws<DeserializationException>(() => Test.{1}Deserialize(new MemoryStream(input2)));
         }}
     }}
 }}
@@ -179,7 +178,7 @@ namespace Serde.Tests {{
     .unwrap();
 
     dotnet_build(&test_dir);
-    run_mstest(&test_dir);
+    run_nunit(&test_dir);
 }
 
 #[test]
@@ -250,15 +249,14 @@ fn test_csharp_runtime_on_supported_types(dir: PathBuf, runtime: Runtime) {
 using System;
 using System.Linq;
 using System.IO;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace Serde.Tests {{
-    [TestClass]
     public class TestRuntime {{
         static readonly byte[][] positive_inputs = new byte[][] {{{0}}};
         static readonly byte[][] negative_inputs = new byte[][] {{{1}}};
 
-        [TestMethod]
+        [Test]
         public void TestPassFailEncoding() {{
             foreach (byte[] input in positive_inputs) {{
                 SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
@@ -270,20 +268,17 @@ namespace Serde.Tests {{
                 for (int i = 0; i < input.Length; i++) {{
                     byte[] input2 = input.ToArray();
                     input2[i] ^= 0x80;
+                    SerdeData test2;
                     try {{
-                        SerdeData test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
-                        Assert.AreNotEqual(test2, test);
+                        test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
                     }} 
-                    catch (Exception) {{ }} 
+                    catch (Exception) {{ continue; }}
+                    Assert.AreNotEqual(test2, test);
                 }}
             }}
     
             foreach (byte[] input in negative_inputs) {{
-                try {{
-                    SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
-                    Assert.Fail("Input should fail to deserialize: " + input.ToString());
-                }}
-                catch (Exception) {{ }}
+                Assert.Catch(() => SerdeData.{2}Deserialize(new MemoryStream(input)));
             }}
         }}
     }}
@@ -296,5 +291,5 @@ namespace Serde.Tests {{
     .unwrap();
 
     dotnet_build(&test_dir);
-    run_mstest(&test_dir);
+    run_nunit(&test_dir);
 }

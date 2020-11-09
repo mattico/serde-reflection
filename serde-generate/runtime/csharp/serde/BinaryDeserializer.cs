@@ -56,9 +56,9 @@ namespace Serde {
         public bool deserialize_bool() {
             byte value = input.ReadByte();
             switch (value) {
-                case 0: return false;
-                case 1: return true;
-                default: throw new DeserializationException("Incorrect value for bool: " + value);
+            case 0: return false;
+            case 1: return true;
+            default: throw new DeserializationException("Incorrect value for bool: " + value);
             }
         }
 
@@ -97,7 +97,16 @@ namespace Serde {
 
         public BigInteger deserialize_i128() => new BigInteger(input.ReadBytes(16));
 
-        public bool deserialize_option_tag() => input.ReadBoolean();
+        public bool deserialize_option_tag()
+        {
+            byte value = input.ReadByte();
+            switch (value)
+            {
+            case 0: return false;
+            case 1: return true;
+            default: throw new DeserializationException("Incorrect value for Option tag: " + value);
+            }
+        }
 
         public long get_buffer_offset() => input.BaseStream.Position;
     }
