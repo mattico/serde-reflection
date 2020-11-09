@@ -274,18 +274,16 @@ namespace Serde.Tests {{
                         SerdeData test2 = SerdeData.{2}Deserialize(new MemoryStream(input2));
                         Assert.AreNotEqual(test2, test);
                     }} 
-                    catch (NotImplementedException) {{ }} 
-                    catch (DeserializationException) {{ }}
+                    catch (Exception) {{ }} 
                 }}
             }}
     
             foreach (byte[] input in negative_inputs) {{
                 try {{
                     SerdeData test = SerdeData.{2}Deserialize(new MemoryStream(input));
-                    throw new Exception("Input should fail to deserialize: " + input.ToString());
+                    Assert.Fail("Input should fail to deserialize: " + input.ToString());
                 }}
-                catch (NotImplementedException) {{ }} 
-                catch (DeserializationException) {{ }}
+                catch (Exception) {{ }}
             }}
         }}
     }}

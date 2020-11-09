@@ -53,7 +53,14 @@ namespace Serde {
             return new Bytes(content);
         }
 
-        public bool deserialize_bool() => input.ReadBoolean();
+        public bool deserialize_bool() {
+            byte value = input.ReadByte();
+            switch (value) {
+                case 0: return false;
+                case 1: return true;
+                default: throw new DeserializationException("Incorrect value for bool: " + value);
+            }
+        }
 
         public Unit deserialize_unit() => new Unit();
 
