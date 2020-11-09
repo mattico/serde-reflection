@@ -11,8 +11,9 @@ using System.Text;
 namespace Serde
 {
     public abstract class BinarySerializer: ISerializer, IDisposable {
-        protected MemoryStream buffer;
-        protected BinaryWriter output;
+        protected readonly MemoryStream buffer;
+        protected readonly BinaryWriter output;
+        protected readonly Encoding utf8 = Encoding.GetEncoding("utf-8", new EncoderExceptionFallback(), new DecoderExceptionFallback());
         private long containerDepthBudget;
 
         public BinarySerializer(long maxContainerDepth) {
@@ -42,7 +43,7 @@ namespace Serde
 
         public byte[] get_bytes() => buffer.ToArray();
 
-        public void serialize_str([NotNull] string value) => serialize_bytes(Encoding.UTF8.GetBytes(value));
+        public void serialize_str([NotNull] string value) => serialize_bytes(utf8.GetBytes(value));
 
         public void serialize_bytes(ReadOnlySpan<byte> value) {
             serialize_len(value.Length);

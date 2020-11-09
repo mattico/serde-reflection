@@ -5,7 +5,8 @@ using System;
 using System.Numerics;
 using System.Text;
 
-namespace Serde {
+namespace Serde
+{
     public interface ISerializer {
         void serialize_str(string value);
 

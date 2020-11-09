@@ -5,7 +5,8 @@ using System;
 using System.Numerics;
 using System.Text;
 
-namespace Serde {
+namespace Serde
+{
     public interface IDeserializer {
         string deserialize_str();
 
@@ -51,8 +52,8 @@ namespace Serde {
 
         void decrease_container_depth();
 
-        long get_buffer_offset();
+        int get_buffer_offset();
 
-        void check_that_key_slices_are_increasing(ReadOnlySpan<byte> key1, ReadOnlySpan<byte> key2);
+        void check_that_key_slices_are_increasing(Range key1, Range key2);
     }
 }

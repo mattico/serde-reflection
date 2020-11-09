@@ -3,16 +3,16 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 
-namespace Serde.Lcs {
+namespace Serde.Lcs
+{
     public class LcsDeserializer: BinaryDeserializer {
-        public LcsDeserializer([NotNull] Stream stream) : base(stream, LcsSerializer.MAX_CONTAINER_DEPTH) { }
+        public LcsDeserializer([NotNull] byte[] input) : base(input, LcsSerializer.MAX_CONTAINER_DEPTH) { }
 
         private int deserialize_uleb128_as_u32() {
             long value = 0;
             for (int shift = 0; shift < 32; shift += 7) {
-                byte x = input.ReadByte();
+                byte x = reader.ReadByte();
                 byte digit = (byte) (x & 0x7F);
                 value |= ((long)digit << shift);
                 if ((value < 0) || (value > int.MaxValue)) {
@@ -32,8 +32,8 @@ namespace Serde.Lcs {
 
         public override int deserialize_variant_index() => deserialize_uleb128_as_u32();
 
-        public override void check_that_key_slices_are_increasing(ReadOnlySpan<byte> key1, ReadOnlySpan<byte> key2) {
-            if (Verification.CompareLexicographic(key1, key2) >= 0) {
+        public override void check_that_key_slices_are_increasing(Range key1, Range key2) {
+            if (Verification.CompareLexicographic(input[key1], input[key2]) >= 0) {
                 throw new DeserializationException("Error while decoding map: keys are not serialized in the expected order");
             }
         }

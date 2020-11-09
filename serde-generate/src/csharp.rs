@@ -524,8 +524,18 @@ return obj;
                     r#"
 long length = deserializer.deserialize_len();
 var obj = new Dictionary<{}, {}>();
+int previous_key_start = 0;
+int previous_key_end = 0;
 for (long i = 0; i < length; i++) {{
+    int key_start = deserializer.get_buffer_offset();
     var key = {};
+    int key_end = deserializer.get_buffer_offset();
+    if (i > 0) {{
+        deserializer.check_that_key_slices_are_increasing(
+            previous_key_start..previous_key_end, key_start..key_end);
+    }}
+    previous_key_start = key_start;
+    previous_key_end = key_end;
     var value = {};
     obj[key] = value;
 }}
