@@ -347,7 +347,7 @@ using AD.FunctionalExtensions;"
             Str => format!("serializer.serialize_str({});", value),
             Bytes => format!("serializer.serialize_bytes({});", value),
             _ => format!(
-                "{}.serialize_{}({}, serializer);",
+                "{}.Serialize_{}({}, serializer);",
                 self.quote_qualified_name("TraitHelpers"),
                 common::mangle_type(format),
                 value
@@ -359,7 +359,7 @@ using AD.FunctionalExtensions;"
         use Format::*;
         match format {
             TypeName(name) => format!(
-                "{}.deserialize(deserializer)",
+                "{}.Deserialize(deserializer)",
                 self.quote_qualified_name(name)
             ),
             Unit => "deserializer.deserialize_unit()".to_string(),
@@ -596,14 +596,14 @@ return obj;
         let fields = match variant {
             Unit => Vec::new(),
             NewType(format) => vec![Named {
-                name: "value".to_string(),
+                name: "Value".to_string(),
                 value: format.as_ref().clone(),
             }],
             Tuple(formats) => formats
                 .iter()
                 .enumerate()
                 .map(|(i, f)| Named {
-                    name: format!("field{}", i),
+                    name: format!("Field{}", i),
                     value: f.clone(),
                 })
                 .collect(),
@@ -640,7 +640,7 @@ return obj;
                 "public sealed class {}: {} {{",
                 name, base
             )?;
-            "override"
+            "override "
         } else {
             self.output_comment(name)?;
             writeln!(self.out, "public sealed class {} {{", name)?;
@@ -683,7 +683,7 @@ return obj;
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic {} void serialize(ISerializer serializer) {{",
+                "\npublic {}void Serialize(ISerializer serializer) {{",
                 fn_mods
             )?;
             self.out.indent();
@@ -713,30 +713,34 @@ return obj;
             if variant_index.is_none() {
                 writeln!(
                     self.out,
-                    "\npublic static {} {} deserialize(IDeserializer deserializer) {{",
+                    "\npublic static {}{} Deserialize(IDeserializer deserializer) {{",
                     fn_mods,
                     name,
                 )?;
             } else {
                 writeln!(
                     self.out,
-                    "\ninternal static {} load(IDeserializer deserializer) {{",
+                    "\ninternal static {} Load(IDeserializer deserializer) {{",
                     name,
                 )?;
             }
             self.out.indent();
-            writeln!(self.out, "deserializer.increase_container_depth();")?;
-            writeln!(self.out, "Builder builder = new Builder();")?;
-            for field in fields {
-                writeln!(
-                    self.out,
-                    "builder.{} = {};",
-                    field.name,
-                    self.quote_deserialize(&field.value)
-                )?;
+            if fields.len() > 0 {
+                writeln!(self.out, "deserializer.increase_container_depth();")?;
+                writeln!(self.out, "Builder builder = new Builder();")?;
+                for field in fields {
+                    writeln!(
+                        self.out,
+                        "builder.{} = {};",
+                        field.name,
+                        self.quote_deserialize(&field.value)
+                    )?;
+                }
+                writeln!(self.out, "deserializer.decrease_container_depth();")?;
+                writeln!(self.out, "return builder.Build();")?;
+            } else {
+                writeln!(self.out, "return new {}();", name)?;
             }
-            writeln!(self.out, "deserializer.decrease_container_depth();")?;
-            writeln!(self.out, "return builder.build();")?;
             self.out.unindent();
             writeln!(self.out, "}}")?;
 
@@ -790,8 +794,10 @@ if (GetType() != obj.GetType()) return false;
         writeln!(self.out, "return value;")?;
         self.out.unindent();
         writeln!(self.out, "}}")?;
-        // Builder
-        self.output_struct_or_variant_container_builder(name, fields)?;
+        if fields.len() > 0
+        {
+            self.output_struct_or_variant_container_builder(name, fields)?;
+        }
         // Custom code
         self.output_custom_code()?;
         // End of class
@@ -824,7 +830,7 @@ if (GetType() != obj.GetType()) return false;
         // Finalization
         writeln!(
             self.out,
-            r#"public {0} build() {{
+            r#"public {0} Build() {{
     return new {0}({1}
     );
 }}"#,
@@ -858,11 +864,11 @@ if (GetType() != obj.GetType()) return false;
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic abstract void serialize(ISerializer serializer);"
+                "\npublic abstract void Serialize(ISerializer serializer);"
             )?;
             write!(
                 self.out,
-                "\npublic static {} deserialize(IDeserializer deserializer) {{",
+                "\npublic static {} Deserialize(IDeserializer deserializer) {{",
                 name
             )?;
             self.out.indent();
@@ -876,7 +882,7 @@ switch (index) {{"#,
             for (index, variant) in variants {
                 writeln!(
                     self.out,
-                    "case {}: return {}.load(deserializer);",
+                    "case {}: return {}.Load(deserializer);",
                     index, variant.name,
                 )?;
             }
@@ -907,7 +913,7 @@ switch (index) {{"#,
             r#"
 public byte[] {0}Serialize()  {{
     ISerializer serializer = new {0}.{0}Serializer();
-    serialize(serializer);
+    Serialize(serializer);
     return serializer.get_bytes();
 }}"#,
             encoding.name().to_camel_case()
@@ -927,7 +933,7 @@ public static {0} {1}Deserialize(byte[] input) {{
          throw new DeserializationException("Cannot deserialize null array");
     }}
     IDeserializer deserializer = new {1}.{1}Deserializer(input);
-    {0} value = deserialize(deserializer);
+    {0} value = Deserialize(deserializer);
     if (deserializer.get_buffer_offset() < input.Length) {{
          throw new DeserializationException("Some input bytes were not read");
     }}
