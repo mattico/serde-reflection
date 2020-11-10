@@ -6,7 +6,7 @@ use crate::{
     indent::{IndentConfig, IndentedWriter},
     CodeGeneratorConfig, Encoding,
 };
-use heck::CamelCase;
+use heck::{CamelCase, MixedCase};
 use include_dir::include_dir as include_directory;
 use serde_reflection::{ContainerFormat, Format, FormatHolder, Named, Registry, VariantFormat};
 use std::{
@@ -243,14 +243,8 @@ using AD.FunctionalExtensions;"
             Str => "string".into(),
             Bytes => "Bytes".into(),
 
-            Option(format) => format!(
-                "Option<{}>",
-                self.quote_type(format)
-            ),
-            Seq(format) => format!(
-                "List<{}>",
-                self.quote_type(format)
-            ),
+            Option(format) => format!("Option<{}>", self.quote_type(format)),
+            Seq(format) => format!("List<{}>", self.quote_type(format)),
             Map { key, value } => format!(
                 "Dictionary<{}, {}>",
                 self.quote_type(key),
@@ -603,14 +597,159 @@ return obj;
                 .iter()
                 .enumerate()
                 .map(|(i, f)| Named {
-                    name: format!("Field{}", i),
+                    name: format!("Item{}", i),
                     value: f.clone(),
                 })
                 .collect(),
-            Struct(fields) => fields.clone(),
+            Struct(fields) => fields
+                .iter()
+                .map(|f| Named {
+                    name: f.name.to_camel_case(),
+                    value: f.value.clone(),
+                })
+                .collect(),
             Variable(_) => panic!("incorrect value"),
         };
-        self.output_struct_or_variant_container(Some(base), Some(index), name, &fields)
+        writeln!(self.out)?;
+        self.output_comment(name)?;
+        writeln!(
+            self.out,
+            "public sealed class {} : IVariant, IEquatable<Variant> {{",
+            name
+        )?;
+        self.enter_class(name, &[]);
+
+        // Fields
+        for field in &fields {
+            writeln!(
+                self.out,
+                "public {} {} {{ get; }}",
+                self.quote_type(&field.value),
+                field.name
+            )?;
+        }
+
+        // Constructor
+        let args = fields
+            .iter()
+            .map(|f| format!("{} {}", self.quote_type(&f.value), f.name.to_mixed_case()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(self.out, "public {}({}) {{", name, args)?;
+        self.out.indent();
+        for field in &fields {
+            writeln!(self.out, "{} = {};", field.name, field.name.to_mixed_case())?;
+        }
+        self.out.unindent();
+        writeln!(self.out, "}}")?;
+
+        // Deconstructor
+        let args = fields
+            .iter()
+            .map(|f| {
+                format!(
+                    "out {} {}",
+                    self.quote_type(&f.value),
+                    f.name.to_mixed_case()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(self.out, "public void Deconstruct({}) {{", args)?;
+        self.out.indent();
+        for field in &fields {
+            writeln!(self.out, "{} = {};", field.name.to_mixed_case(), field.name)?;
+        }
+        self.out.unindent();
+        writeln!(self.out, "}}")?;
+
+        // GetHashCode
+        writeln!(self.out, "public override int GetHashCode() {{")?;
+        self.out.indent();
+        writeln!(self.out, "HashCode hash = new HashCode();")?;
+        for field in &fields {
+            writeln!(self.out, "hash.Add({});", &field.name)?;
+        }
+        writeln!(self.out, "return hash.ToHashCode();")?;
+        self.out.unindent();
+        writeln!(self.out, "}}")?;
+
+        // Equals
+        writeln!(
+            self.out,
+            r#"public override bool Equals(object obj) => Equals(obj as {0});
+            public static bool operator ==({0} left, {0} right) => Equals(left, right);
+            public static bool operator !=({0} left, {0} right) => !(left == right);"#,
+            name
+        )?;
+        writeln!(self.out, "public bool Equals(Variant other) {{")?;
+        self.out.indent();
+        writeln!(
+            self.out,
+            "return other != null &&\n{};",
+            fields
+                .iter()
+                .map(|f| f.name.as_ref())
+                .collect::<Vec<_>>()
+                .join(" && \n")
+        )?;
+        self.out.unindent();
+        writeln!(self.out, "}}")?;
+
+        // Serialize
+        if self.generator.config.serialization {
+            writeln!(
+                self.out,
+                "\npublic void Serialize(ISerializer serializer) {{",
+            )?;
+            self.out.indent();
+            writeln!(self.out, "serializer.increase_container_depth();")?;
+            writeln!(self.out, "serializer.serialize_variant_index({});", index)?;
+            for field in &fields {
+                writeln!(
+                    self.out,
+                    "{}",
+                    self.quote_serialize_value(&field.name, &field.value)
+                )?;
+            }
+            writeln!(self.out, "serializer.decrease_container_depth();")?;
+            self.out.unindent();
+            writeln!(self.out, "}}")?;
+        }
+
+        // Deserialize
+        if self.generator.config.serialization {
+            writeln!(
+                self.out,
+                "\ninternal static {} Load(IDeserializer deserializer) {{",
+                name,
+            )?;
+            self.out.indent();
+            if fields.len() > 0 {
+                writeln!(self.out, "deserializer.increase_container_depth();")?;
+                writeln!(self.out, "var obj = new {}(", name)?;
+                self.out.indent();
+                for field in fields {
+                    writeln!(self.out, "{},", self.quote_deserialize(&field.value))?;
+                }
+                self.out.unindent();
+                writeln!(self.out, ");")?;
+                writeln!(self.out, "deserializer.decrease_container_depth();")?;
+                writeln!(self.out, "return obj;")?;
+            } else {
+                writeln!(self.out, "return new {}();", name)?;
+            }
+            self.out.unindent();
+            writeln!(self.out, "}}")?;
+
+            for encoding in &self.generator.config.encodings {
+                self.output_class_deserialize_for_encoding(name, *encoding)?;
+            }
+        }
+
+        self.leave_class(&[]);
+        writeln!(self.out, "}}")?;
+        Ok(())
     }
 
     fn output_variants(
@@ -626,26 +765,13 @@ return obj;
 
     fn output_struct_or_variant_container(
         &mut self,
-        variant_base: Option<&str>,
-        variant_index: Option<u32>,
         name: &str,
         fields: &[Named<Format>],
     ) -> Result<()> {
         // Beginning of class
         writeln!(self.out)?;
-        let fn_mods = if let Some(base) = variant_base {
-            self.output_comment(name)?;
-            writeln!(
-                self.out,
-                "public sealed class {}: {} {{",
-                name, base
-            )?;
-            "override "
-        } else {
-            self.output_comment(name)?;
-            writeln!(self.out, "public sealed class {} {{", name)?;
-            ""
-        };
+        self.output_comment(name)?;
+        writeln!(self.out, "public sealed class {} {{", name)?;
         let reserved_names = &["Builder"];
         self.enter_class(name, reserved_names);
         // Fields
@@ -678,19 +804,15 @@ return obj;
             writeln!(self.out, "{} = _{};", &field.name, &field.name)?;
         }
         self.out.unindent();
-        writeln!(self.out, "}}")?;
+        writeln!(self.out, "}}\n")?;
         // Serialize
         if self.generator.config.serialization {
             writeln!(
                 self.out,
-                "\npublic {}void Serialize(ISerializer serializer) {{",
-                fn_mods
+                "public void Serialize(ISerializer serializer) {{",
             )?;
             self.out.indent();
             writeln!(self.out, "serializer.increase_container_depth();")?;
-            if let Some(index) = variant_index {
-                writeln!(self.out, "serializer.serialize_variant_index({});", index)?;
-            }
             for field in fields {
                 writeln!(
                     self.out,
@@ -701,29 +823,14 @@ return obj;
             writeln!(self.out, "serializer.decrease_container_depth();")?;
             self.out.unindent();
             writeln!(self.out, "}}")?;
-
-            if variant_index.is_none() {
-                for encoding in &self.generator.config.encodings {
-                    self.output_class_serialize_for_encoding(*encoding)?;
-                }
-            }
         }
         // Deserialize (struct) or Load (variant)
         if self.generator.config.serialization {
-            if variant_index.is_none() {
-                writeln!(
-                    self.out,
-                    "\npublic static {}{} Deserialize(IDeserializer deserializer) {{",
-                    fn_mods,
-                    name,
-                )?;
-            } else {
-                writeln!(
-                    self.out,
-                    "\ninternal static {} Load(IDeserializer deserializer) {{",
-                    name,
-                )?;
-            }
+            writeln!(
+                self.out,
+                "\npublic static {} Deserialize(IDeserializer deserializer) {{",
+                name,
+            )?;
             self.out.indent();
             if fields.len() > 0 {
                 writeln!(self.out, "deserializer.increase_container_depth();")?;
@@ -744,10 +851,8 @@ return obj;
             self.out.unindent();
             writeln!(self.out, "}}")?;
 
-            if variant_index.is_none() {
-                for encoding in &self.generator.config.encodings {
-                    self.output_class_deserialize_for_encoding(name, *encoding)?;
-                }
+            for encoding in &self.generator.config.encodings {
+                self.output_class_deserialize_for_encoding(name, *encoding)?;
             }
         }
         // Equality
@@ -794,8 +899,7 @@ if (GetType() != obj.GetType()) return false;
         writeln!(self.out, "return value;")?;
         self.out.unindent();
         writeln!(self.out, "}}")?;
-        if fields.len() > 0
-        {
+        if fields.len() > 0 {
             self.output_struct_or_variant_container_builder(name, fields)?;
         }
         // Custom code
@@ -855,7 +959,7 @@ if (GetType() != obj.GetType()) return false;
     ) -> Result<()> {
         writeln!(self.out)?;
         self.output_comment(name)?;
-        writeln!(self.out, "public abstract class {} {{", name)?;
+        writeln!(self.out, "public sealed class {} {{", name)?;
         let reserved_names = variants
             .values()
             .map(|v| v.name.as_str())
@@ -1009,10 +1113,7 @@ impl crate::SourceInstaller for Installer {
     }
 
     fn install_serde_runtime(&self) -> std::result::Result<(), Self::Error> {
-        self.install_runtime(
-            include_directory!("runtime/csharp/Serde"),
-            "Serde",
-        )
+        self.install_runtime(include_directory!("runtime/csharp/Serde"), "Serde")
     }
 
     fn install_bincode_runtime(&self) -> std::result::Result<(), Self::Error> {
@@ -1023,9 +1124,6 @@ impl crate::SourceInstaller for Installer {
     }
 
     fn install_lcs_runtime(&self) -> std::result::Result<(), Self::Error> {
-        self.install_runtime(
-            include_directory!("runtime/csharp/Serde/Lcs"),
-            "Serde/Lcs",
-        )
+        self.install_runtime(include_directory!("runtime/csharp/Serde/Lcs"), "Serde/Lcs")
     }
 }
