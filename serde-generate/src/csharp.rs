@@ -165,8 +165,8 @@ where
         writeln!(
             self.out,
             r"using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -247,16 +247,6 @@ using System.Numerics;"
         Ok(())
     }
 
-    fn is_nullable(&self, format: &Format) -> bool {
-        use Format::*;
-        match format {
-            TypeName(name) => !self.cstyle_enum_names.contains(name),
-            Unit | Str | Seq(_) | Map {..} | TupleArray { .. } => true,
-            Variable(_) => panic!("unexpected value"),
-            _ => false,
-        }
-    }
-
     fn quote_type(&self, format: &Format) -> String {
         use Format::*;
         match format {
@@ -277,7 +267,7 @@ using System.Numerics;"
             F64 => "double".into(),
             Char => "char".into(),
             Str => "string".into(),
-            Bytes => "ImmutableArray<byte>".into(),
+            Bytes => "byte[]".into(),
 
             Option(format) => format!("Option<{}>", self.quote_type(format)),
             Seq(format) => format!("List<{}>", self.quote_type(format)),
@@ -292,6 +282,16 @@ using System.Numerics;"
                 size: _size,
             } => format!("{}[]", self.quote_type(content),),
             Variable(_) => panic!("unexpected value"),
+        }
+    }
+
+    fn is_nullable(&self, format: &Format) -> bool {
+        use Format::*;
+        match format {
+            TypeName(name) => !self.cstyle_enum_names.contains(name),
+            Unit | Str | Seq(_) | Map {..} | TupleArray { .. } => true,
+            Variable(_) => panic!("unexpected value"),
+            _ => false,
         }
     }
 
@@ -829,20 +829,7 @@ return obj;
         writeln!(self.out, "if (other == null) return false;")?;
         writeln!(self.out, "if (ReferenceEquals(this, other)) return true;")?;
         for field in fields {
-            if matches!(field.value, Format::Seq(_) | Format::Bytes | Format::Map { .. } | Format::TupleArray { .. })
-            {
-                writeln!(
-                    self.out,
-                    "if (!Enumerable.SequenceEqual({0}, other.{0})) return false;",
-                    &field.name,
-                )?;
-            } else {
-                writeln!(
-                    self.out,
-                    "if (!{0}.Equals(other.{0})) return false;",
-                    &field.name,
-                )?;
-            }
+            self.output_equality_check(&field.value, field.name.clone(), format!("other.{}", field.name))?;
         }
         writeln!(self.out, "return true;")?;
         self.out.unindent();
@@ -854,6 +841,7 @@ return obj;
         self.out.indent();
         writeln!(self.out, "int value = 7;")?;
         for field in fields {
+            // TODO: IStructuralEquatable.GetHashCode()
             writeln!(
                 self.out,
                 "value = 31 * value + {0}.GetHashCode();",
@@ -974,6 +962,92 @@ switch (index) {{"#,
         self.output_variants(name, variants)?;
         self.leave_class(&reserved_names);
         writeln!(self.out, "}}\n")
+    }
+
+    /// Returns true if the `Format` implements value equality through its `Equals()` method.
+    fn is_value_equality(&self, format: &Format) -> bool {
+        use Format::*;
+        match format {
+            TypeName(_) | Unit | Bool | Char | Str | F32 | F64 | 
+            I8 | I16 | I32 | I64 | I128 | 
+            U8 | U16 | U32 | U64 | U128 => true,
+            Bytes | TupleArray { .. } => false, // Need to use IStructuralEquatable
+            Seq(_) | Map { .. } => false, // Need to use SequenceEquals, etc
+            Tuple(f) => f.iter().all(|f| self.is_value_equality(f)),
+            Option(f) => self.is_value_equality(f),
+            Variable(_) => panic!("unexpected value"),
+        } 
+    }
+
+    fn output_equality_comparer(&mut self, format: &Format) -> Result<()> {
+        use Format::*;
+        if self.is_value_equality(&format) {
+            return Ok(()); // Calling IStructuralEquatable.Equals(other) without an IEqualityComparer uses the default
+        }
+        match format {
+            Bytes => write!(self.out, ", StructuralEqualityComparer<{}>.Default", self.quote_type(format))?,
+            TupleArray { content, .. } | Seq(content) if self.is_value_equality(content) => {
+                write!(self.out, ", StructuralEqualityComparer<{}>.Default", self.quote_type(format))?;
+            }
+            _ => {
+                writeln!(self.out, ", Comparer<{}>.Create((left, right) => {{", self.quote_type(format))?;
+                self.out.indent();
+                self.output_equality_check(format, "left".into(), "right".into())?;
+                writeln!(self.out, "return true;")?;
+                self.out.unindent();
+                write!(self.out, "}})")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn output_equality_check(&mut self, format: &Format, this: String, other: String) -> Result<()> {
+        use Format::*;
+        if self.is_value_equality(&format) {
+            return writeln!(self.out, "if (!{}.Equals({})) return false;", this, other);
+        }
+        match format.clone() {
+            Bytes => writeln!(self.out, "if (!({} as IStructuralEquatable).Equals({})) return false;", this, other)?,
+            TupleArray { content, .. } => {
+                write!(self.out, "if (!({} as IStructuralEquatable).Equals({}", this, other)?;
+                self.output_equality_comparer(content.as_ref())?;
+                writeln!(self.out, ")) return false;")?;
+            }
+            Seq(f) => {
+                writeln!(self.out, "if ({}.Count != {}.Count) return false;", this, other)?;
+                writeln!(self.out, "if (!Enumerable.SequenceEqual ({}, {}", this, other)?;
+                self.output_equality_comparer(f.as_ref())?;
+                writeln!(self.out, ")) return false;")?;
+            }
+            Tuple(variants) => {
+                for (index, value) in variants.iter().cloned().enumerate() {
+                    let this_name = format!("{0}.Item{1}", this, index + 1);
+                    let other_name = format!("{0}.Item{1}", other, index + 1);
+                    self.output_equality_check(&value, this_name, other_name)?;
+                }
+            }
+            Map { key, value } => {
+                writeln!(self.out, "if ({}.Count != {}.Count) return false;", this, other)?;
+                if self.is_value_equality(&key) && self.is_value_equality(&value) {
+                    writeln!(self.out, "if ({}.Except({}).Any()) return false;", this, other)?;
+                } else {
+                    writeln!(self.out, "foreach (var key in {}.Keys) {{", this)?;
+                    self.out.indent();
+                    writeln!(self.out, "if (!{}.ContainsKey(key)) return false;", other)?;
+                    self.output_equality_check(value.as_ref(), format!("{}[key]", this), format!("{}[key]", other))?;
+                    self.out.unindent();
+                    writeln!(self.out, "}}")?;
+                }                
+            }
+            Option(f) => {
+                write!(self.out, "if ({}.Equals({}", this, other)?;
+                self.output_equality_comparer(f.as_ref())?;
+                writeln!(self.out, "}}")?;
+            }
+            _ => unimplemented!(),
+        }
+
+        Ok(())
     }
 
     fn output_cstyle_enum(
@@ -1104,11 +1178,7 @@ public static {0} {1}Deserialize(ArraySegment<byte> input) {{
                 .collect::<Vec<_>>(),
             Struct(fields) => fields.clone(),
             Enum(variants) => {
-                if variants
-                    .iter()
-                    .all(|(_i, v)| v.value == VariantFormat::Unit)
-                    && self.cstyle_enum_names.contains(&name.into())
-                {
+                if self.cstyle_enum_names.contains(&name.into()) {
                     self.output_cstyle_enum(name, variants)?;
                 } else {
                     self.output_enum_container(name, variants)?;

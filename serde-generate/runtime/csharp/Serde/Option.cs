@@ -1,9 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace Serde
 {
-    public readonly struct Option<T> : IEquatable<Option<T>> where T : IEquatable<T>
+    public readonly struct Option<T> : IEquatable<Option<T>>, IStructuralEquatable where T : IEquatable<T>
     {
         public static Option<T> None => default;
         public static Option<T> Some(T value)
@@ -47,6 +48,19 @@ namespace Serde
         public static bool operator ==(Option<T> left, Option<T> right) => Equals(left, right);
 
         public static bool operator !=(Option<T> left, Option<T> right) => !Equals(left, right);
+
+        bool IStructuralEquatable.Equals(object obj, IEqualityComparer comparer)
+        {
+            if (obj is Option<T> other)
+            {
+                if (isSome != other.isSome) return false;
+                if (!isSome) return true;
+                return comparer.Equals(this, other);
+            }
+            return false;
+        }
+
+        int IStructuralEquatable.GetHashCode(IEqualityComparer comparer) => comparer.GetHashCode(this);
     }
 
     public static class OptionExtensions
