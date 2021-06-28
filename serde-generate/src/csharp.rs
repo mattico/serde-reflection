@@ -1032,7 +1032,7 @@ public static {0} Deserialize(Serde.IDeserializer deserializer) {{
     deserializer.increase_container_depth();
     int index = deserializer.deserialize_variant_index();
     if (!Enum.IsDefined(typeof({0}), index))
-        throw new Serde.DeserializationException("Unknown variant index for {}: " + index);
+        throw new Serde.DeserializationException("Unknown variant index for {0}: " + index);
     {0} value = ({0})index;
     deserializer.decrease_container_depth();
     return value;
@@ -1095,12 +1095,13 @@ public static {0} {1}Deserialize(byte[] input) => {1}Deserialize(new ArraySegmen
 
 public static {0} {1}Deserialize(ArraySegment<byte> input) {{
     if (input == null) {{
-         throw new Serde.DeserializationException("Cannot deserialize null array");
+        throw new Serde.DeserializationException("Cannot deserialize null array");
     }}
     Serde.IDeserializer deserializer = new {1}.{1}Deserializer(input);
     {0} value = Deserialize(deserializer);
-    if (deserializer.get_buffer_offset() < input.Count) {{
-         throw new Serde.DeserializationException("Some input bytes were not read");
+    int remaining = input.Count - deserializer.get_buffer_offset();
+    if (remaining > 0) {{
+        throw new Serde.DeserializationException($"Some input bytes were not read for {0}: {{remaining}} bytes left");
     }}
     return value;
 }}"#,
