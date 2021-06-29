@@ -1091,19 +1091,16 @@ public byte[] {0}Serialize()  {{
         writeln!(
             self.out,
             r#"
-public static {0} {1}Deserialize(byte[] input) => {1}Deserialize(new ArraySegment<byte>(input));
+public static ArraySegment<byte> {1}Deserialize(byte[] input, out {0} value) => {1}Deserialize(new ArraySegment<byte>(input), out value);
 
-public static {0} {1}Deserialize(ArraySegment<byte> input) {{
+public static ArraySegment<byte> {1}Deserialize(ArraySegment<byte> input, out {0} value) {{
     if (input == null) {{
         throw new Serde.DeserializationException("Cannot deserialize null array");
     }}
     Serde.IDeserializer deserializer = new {1}.{1}Deserializer(input);
-    {0} value = Deserialize(deserializer);
+    value = Deserialize(deserializer);
     int remaining = input.Count - deserializer.get_buffer_offset();
-    if (remaining > 0) {{
-        throw new Serde.DeserializationException($"Some input bytes were not read for {0}: {{remaining}} bytes left");
-    }}
-    return value;
+    return new ArraySegment<byte>(input.Array, deserializer.get_buffer_offset(), remaining);
 }}"#,
             name,
             encoding.name().to_camel_case()
